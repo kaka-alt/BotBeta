@@ -2,6 +2,7 @@ import logging
 import os
 import threading
 from dotenv import load_dotenv
+from exportar_para_excel import export_data_to_drive
 
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
@@ -23,7 +24,7 @@ load_dotenv(dotenv_path=dotenv_path)  # Carrega as variáveis do rail.env
 
 # Importa a função principal de exportação do seu arquivo exportar_para_excel.py
 # O nome da função foi corrigido para 'exportar_dados_localmente'.
-from exportar_para_excel import exportar_dados_localmente
+from exportar_para_excel import export_data_to_drive
 
 # Configuração básica de logging para ver as mensagens no console/logs do Railway
 logging.basicConfig(
@@ -119,7 +120,7 @@ def exportar():
     try:
         # Chama a função principal de backup do exportar_para_excel.py
         # Essa função se encarrega de ler do banco, gerar Excel e enviar para o Google Drive.
-        exportar_dados_localmente() # Chamada corrigida
+        export_data_to_drive()  # Chamada corrigida
         print("Processo de backup para Google Drive concluído (via endpoint /export).")
         return {"status": "Exportação para Google Drive iniciada com sucesso."}
     except Exception as e:
@@ -141,7 +142,7 @@ async def salvar_onedrive_telegram(update, context):
     try:
         # Chama a função principal de backup do exportar_para_excel.py
         # Essa função se encarrega de ler do banco, gerar Excel e enviar para o Google Drive.
-        exportar_dados_localmente() # Chamada corrigida
+        export_data_to_drive()  # Chamada corrigida
         await update.message.reply_text("Dados salvos no Google Drive com sucesso!")
     except Exception as e:
         logging.error(f"Erro ao salvar dados no Google Drive via Telegram: {e}")
