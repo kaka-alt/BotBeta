@@ -71,10 +71,12 @@ def salvar_no_google_drive(filename: str, filepath: str):
         service = build('drive', 'v3', credentials=creds)
         file_metadata = {'name': filename}
         
-        # Opcional: Se quiser salvar em uma pasta específica, adicione o ID da pasta.
-        # Exemplo: file_metadata['parents'] = ['ID_DA_SUA_PASTA_NO_DRIVE']
+        # --- ADICIONADO: Obter o ID da pasta do Google Drive da variável de ambiente ---
+        folder_id = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
+        if folder_id:
+            file_metadata['parents'] = [folder_id]  # Adiciona o ID da pasta como 'parents'
+        # -----------------------------------------------------------------------------
 
-        # --- CORREÇÃO AQUI: Usar MediaFileUpload ---
         # Determinar o mimetype com base na extensão do arquivo
         mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' # Para .xlsx
         if filename.endswith('.csv'):
@@ -89,7 +91,12 @@ def salvar_no_google_drive(filename: str, filepath: str):
 
         file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
         
-        logger.info(f"Arquivo '{filename}' salvo no Google Drive com ID: '{file.get('id')}'")
+        # Logar o ID da pasta se ele foi usado
+        if folder_id:
+            logger.info(f"Arquivo '{filename}' salvo no Google Drive com ID: '{file.get('id')}' na pasta com ID: '{folder_id}'")
+        else:
+            logger.info(f"Arquivo '{filename}' salvo no Google Drive com ID: '{file.get('id')}' (na raiz ou padrão).")
+
     except HttpError as error:
         logger.error(f"Ocorreu um erro ao salvar no Google Drive: {error}")
     except Exception as e:
