@@ -448,7 +448,7 @@ async def confirmacao(update, context):
 
     if data == "confirmar_salvar":
         utils.salvar_no_banco(context.user_data)
-        exportar_dados_localmente(context.user_data)
+        exportar_dados_localmente()
         await query.edit_message_text("✅ Dados salvos com sucesso no banco de dados! Obrigado pelo registro.")
         context.user_data.clear()
         return ConversationHandler.END
