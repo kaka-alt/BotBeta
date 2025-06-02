@@ -7,7 +7,7 @@ import urllib.parse
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaFileUpload
+from googleapiclient.http import MediaFileUpload, MediaIoBaseUpload  # Importe MediaIoBaseUpload
 from dotenv import load_dotenv
 
 # Configuração de logging
@@ -84,6 +84,7 @@ def upload_file_to_drive(service, filename: str, filepath: str, folder_id: str =
     try:
         file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
         logger.info(f"Arquivo '{filename}' salvo no Google Drive com ID: '{file.get('id')}'")
+        return file.get('id')  # Retorna o ID do arquivo criado
     except HttpError as error:
         logger.error(f"Erro ao salvar o arquivo '{filename}' no Google Drive: {error}")
         raise  # Re-lança a exceção para ser tratada na função chamadora
@@ -92,46 +93,21 @@ def upload_file_to_drive(service, filename: str, filepath: str, folder_id: str =
         raise
 
 
-def update_csv_file(service, file_id: str, filepath: str):
-    """Atualiza o conteúdo de um arquivo CSV existente no Google Drive."""
+def update_file_content(service, file_id: str, filepath: str, mimetype: str):
+    """Atualiza o conteúdo de um arquivo existente no Google Drive."""
 
+    media = MediaFileUpload(filepath, mimetype=mimetype, resumable=True)
     try:
-        # Baixar o conteúdo existente
-        response = service.files().get_media(fileId=file_id).execute()
-        existing_content = response.decode('utf-8')
-    except HttpError as error:
-        logger.error(f"Erro ao obter conteúdo existente do arquivo CSV: {error}")
-        raise
-    except Exception as e:
-        logger.error(f"Erro inesperado ao obter conteúdo existente do arquivo CSV: {e}", exc_info=True)
-        raise
-
-    # Ler o conteúdo novo do arquivo local
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            new_content = f.read()
-    except FileNotFoundError:
-        logger.error(f"Arquivo local '{filepath}' não encontrado.")
-        raise
-
-    # Concatenar o conteúdo existente com o novo
-    updated_content = existing_content.strip() + '\n' + new_content.strip()
-
-    # Preparar para atualizar o arquivo
-    media = MediaFileUpload(filepath, mimetype='text/csv', resumable=True)
-
-    try:
-        # Atualizar o arquivo com o conteúdo concatenado
         service.files().update(
             fileId=file_id,
             media_body=media,
         ).execute()
-        logger.info(f"Arquivo CSV atualizado no Google Drive.")
+        logger.info(f"Arquivo atualizado no Google Drive.")
     except HttpError as error:
-        logger.error(f"Erro ao atualizar o arquivo CSV no Google Drive: {error}")
+        logger.error(f"Erro ao atualizar o arquivo no Google Drive: {error}")
         raise
     except Exception as e:
-        logger.error(f"Erro inesperado ao atualizar o arquivo CSV: {e}", exc_info=True)
+        logger.error(f"Erro inesperado ao atualizar o arquivo: {e}", exc_info=True)
         raise
 
 
@@ -154,12 +130,18 @@ def update_or_create_file(service, filename: str, filepath: str, folder_id: str 
         results = service.files().list(q=query, fields='files(id)').execute()
         files = results.get('files', [])
 
+        # Determinar o mimetype com base na extensão do arquivo
+        mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'  # Para .xlsx
+        if filename.endswith('.csv'):
+            mimetype = 'text/csv'
+        elif filename.endswith('.jpg') or filename.endswith('.jpeg'):
+            mimetype = 'image/jpeg'
+        elif filename.endswith('.png'):
+            mimetype = 'image/png'
+
         if files:  # Se o arquivo existe
             file_id = files[0].get('id')
-            if filename.endswith('.csv'):
-                update_csv_file(service, file_id, filepath)
-            else:
-                upload_file_to_drive(service, filename, filepath, folder_id)  # Sobrescreve outros tipos
+            update_file_content(service, file_id, filepath, mimetype)
         else:  # Se o arquivo não existe
             upload_file_to_drive(service, filename, filepath, folder_id)
 
