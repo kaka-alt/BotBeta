@@ -1,6 +1,5 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from exportar_para_excel import export_data_to_drive
-from exportar_para_excel import exportar_dados_localmente
 from telegram.ext import ContextTypes, ConversationHandler
 from datetime import datetime
 import os
