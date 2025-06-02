@@ -16,7 +16,6 @@ def build_menu(buttons, n_cols, footer_buttons=None):
         menu.append(footer_buttons)
     return menu
 
-
 def botoes_pagina(lista, pagina, prefix="", por_pagina=5):
     inicio = pagina * por_pagina
     fim = inicio + por_pagina
@@ -39,12 +38,10 @@ def botoes_pagina(lista, pagina, prefix="", por_pagina=5):
 
     return buttons, pagina
 
-
 # Lista de Órgãos Públicos
 def ler_orgaos_csv():
     df = pd.read_csv(CSV_ORGAOS)
     return df['nome'].dropna().tolist()
-
 
 def salvar_orgao(novo_orgao: str):
     caminho_orgaos = CSV_ORGAOS
@@ -66,12 +63,10 @@ def salvar_orgao(novo_orgao: str):
         with open(caminho_orgaos, mode='a', newline='', encoding='utf-8') as f:
             f.write(f"{novo_orgao}\n")
 
-
 # Lista Assuntos
 def ler_assuntos_csv():
     df = pd.read_csv(CSV_ASSUNTOS)
     return df['assunto'].dropna().tolist()
-
 
 def salvar_assunto(novo_assunto: str):
     caminho_assuntos = CSV_ASSUNTOS
@@ -93,9 +88,7 @@ def salvar_assunto(novo_assunto: str):
         with open(caminho_assuntos, mode='a', newline='', encoding='utf-8') as f:
             f.write(f"{novo_assunto}\n")
 
-
 # Salvamento de CSV em pasta externa
-
 def salvar_csv(data: dict):
     print("DADOS A SEREM SALVOS:", data)
 
@@ -109,7 +102,7 @@ def salvar_csv(data: dict):
     os.makedirs(pasta_backup, exist_ok=True)
 
     # Arquivo principal (fixo)
-    caminho_principal = (CSV_REGISTRO)
+    caminho_principal = CSV_REGISTRO
 
     caminho_semanal = os.path.join(pasta_semanal, f"{ano}-semana-{semana}-registros.csv")
 
@@ -176,7 +169,6 @@ def salvar_csv(data: dict):
     # Salva no CSV semanal
     escrever_linhas_csv(caminho_semanal)
 
-
 # --- NOVAS FUNÇÕES PARA POSTGRESQL ---
 def conectar_banco():
     """Conecta ao banco de dados PostgreSQL."""
@@ -202,7 +194,6 @@ def conectar_banco():
         print(f"Erro ao conectar ao banco de dados: {e}")
         return None
 
-
 def salvar_no_banco(data: dict):
     """Salva os dados no banco de dados PostgreSQL."""
 
@@ -213,6 +204,10 @@ def salvar_no_banco(data: dict):
     cursor = conn.cursor()  # Cria um cursor para executar comandos SQL
 
     try:
+        # Converte data (string para objeto datetime.date, se necessário)
+        data_str = data.get('data')
+        data_date = datetime.strptime(data_str, '%Y-%m-%d').date() if isinstance(data_str, str) else data_str
+
         # Insere os dados principais na tabela 'registros'
         cursor.execute("""
             INSERT INTO registros (
@@ -223,7 +218,8 @@ def salvar_no_banco(data: dict):
             data.get('colaborador'), data.get('orgao_publico'),
             data.get('figura_publica'), data.get('cargo'),
             data.get('assunto'), data.get('municipio'),
-            data.get('data'), data.get('foto')
+            data_date,  # Aqui já convertido
+            data.get('foto')
         ))
 
         # Se houver demandas, insira-as na tabela 'demandas'

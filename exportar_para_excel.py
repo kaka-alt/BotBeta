@@ -7,6 +7,7 @@ import urllib.parse
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from googleapiclient.http import MediaFileUpload # Importar MediaFileUpload
 from dotenv import load_dotenv
 
 # Configuração de logging
@@ -73,8 +74,20 @@ def salvar_no_google_drive(filename: str, filepath: str):
         # Opcional: Se quiser salvar em uma pasta específica, adicione o ID da pasta.
         # Exemplo: file_metadata['parents'] = ['ID_DA_SUA_PASTA_NO_DRIVE']
 
-        with open(filepath, 'rb') as media_body:
-            file = service.files().create(body=file_metadata, media_body=media_body, fields='id').execute()
+        # --- CORREÇÃO AQUI: Usar MediaFileUpload ---
+        # Determinar o mimetype com base na extensão do arquivo
+        mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' # Para .xlsx
+        if filename.endswith('.csv'):
+            mimetype = 'text/csv'
+        elif filename.endswith('.jpg') or filename.endswith('.jpeg'):
+            mimetype = 'image/jpeg'
+        elif filename.endswith('.png'):
+            mimetype = 'image/png'
+        # Adicione mais mimetypes conforme necessário
+
+        media = MediaFileUpload(filepath, mimetype=mimetype) # Criar o objeto MediaFileUpload
+
+        file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
         
         logger.info(f"Arquivo '{filename}' salvo no Google Drive com ID: '{file.get('id')}'")
     except HttpError as error:
