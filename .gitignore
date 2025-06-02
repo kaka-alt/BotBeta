@@ -1,0 +1,28 @@
+# exportar_para_excel.py
+import os
+import pandas as pd
+from dotenv import load_dotenv
+import requests
+from msal import PublicClientApplication # Importa PublicClientApplication para autenticação de usuário
+from utils import conectar_banco # Garante que utils.py esteja acessível
+from datetime import datetime # Importa datetime para nomes de arquivos com timestamp
+
+# --- Configuração do carregamento do arquivo .env (rail.env) ---
+# Este bloco garante que as variáveis de ambiente sejam carregadas corretamente
+# quando você roda o script localmente. No Railway, elas já serão injetadas.
+script_dir = os.path.dirname(os.path.abspath(__file__))
+dotenv_path = os.path.join(script_dir, 'rail.env') # Define o caminho para 'rail.env'
+load_dotenv(dotenv_path=dotenv_path) # Carrega as variáveis de ambiente do rail.env
+
+# --- Credenciais e configurações do OneDrive (Azure AD) ---
+# Estas variáveis serão lidas do ambiente do Railway (e do rail.env para testes locais)
+CLIENT_ID = os.getenv("CLIENT_ID")
+TENANT_ID = os.getenv("TENANT_ID") # Pode ser "common" para contas pessoais
+ONEDRIVE_REFRESH_TOKEN = os.getenv("ONEDRIVE_REFRESH_TOKEN")
+
+# Para contas pessoais, o 'authority' pode ser "https://login.microsoftonline.com/common"
+# Para contas organizacionais, use f"https://login.microsoftonline.com/{TENANT_ID}"
+AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}" if TENANT_ID else "https://login.microsoftonline.com/common"
+
+# Escopos de recurso. 'offline_access' NÃO deve ser incluído aqui.
+# O MSAL lida com ele automaticamente para a renovação do token.

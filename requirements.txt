@@ -1,0 +1,15 @@
+python-telegram-bot==20.6
+Flask==2.2.5
+aiohttp==3.9.3
+pandas==2.2.2
+python-dotenv==1.0.1
+psycopg2
+openpyxl
+sqlalchemy
+requests
+msal
+fastapi
+uvicorn
+google-api-python-client
+google-auth      
+google-auth-httplib2
