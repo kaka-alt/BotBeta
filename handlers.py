@@ -3,7 +3,7 @@ from exportar_para_excel import exportar_dados_localmente
 from telegram.ext import ContextTypes, ConversationHandler
 from datetime import datetime
 import os
-from config import *
+import config
 from utils import *
 import utils
 from globals import user_data
