@@ -1,5 +1,5 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from exportar_para_excel import salvar_no_google_drive
+from exportar_para_excel import exportar_dados_localmente
 from telegram.ext import ContextTypes, ConversationHandler
 from datetime import datetime
 import os
@@ -448,7 +448,7 @@ async def confirmacao(update, context):
 
     if data == "confirmar_salvar":
         utils.salvar_no_banco(context.user_data)
-        salvar_no_google_drive()
+        exportar_dados_localmente(context.user_data)
         await query.edit_message_text("✅ Dados salvos com sucesso no banco de dados! Obrigado pelo registro.")
         context.user_data.clear()
         return ConversationHandler.END
