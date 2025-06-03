@@ -10,7 +10,8 @@ from telegram.ext import (
 
 # --- IMPORTAÇÕES ESSENCIAIS PARA O SEU FLUXO (AGORA DESCOMENTADAS) ---
 # Certifique-se de que o arquivo 'handlers.py' existe e está correto.
-import handlers 
+from handlers import *
+import handlers
 
 # Certifique-se de que o arquivo 'exportar_para_excel.py' existe e que a função 'export_data_to_drive' está nele.
 from exportar_para_excel import export_data_to_drive 
@@ -144,18 +145,33 @@ async def startup_event():
         conv_handler = ConversationHandler(
             entry_points=[CommandHandler('iniciar', handlers.iniciar_colaborador)],
             states={
-                handlers.ORGAO_PUBLICO: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.orgao_publico)],
-                handlers.ASSUNTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.assunto)],
-                handlers.MUNICIPIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.municipio)],
-                handlers.FOTO: [MessageHandler(filters.PHOTO | filters.TEXT & ~filters.COMMAND, handlers.foto)],
-                handlers.DEMANDA_TEXTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.demanda_texto)],
-                handlers.OV: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.ov)],
-                handlers.PRO: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.pro)],
-                handlers.OBSERVACAO: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.observacao)],
-                handlers.CONFIRMACAO: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.confirmacao)],
-            },
-            fallbacks=[CommandHandler('cancelar', cancelar)],
-        )
+               "COLABORADOR": [CallbackQueryHandler(handlers.colaborador_button, pattern="^colaborador_")],
+            "COLABORADOR_MANUAL": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.colaborador_manual)],
+            "ORGAO_PUBLICO_KEYWORD": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.buscar_orgao)],
+            "ORGAO_PUBLICO_PAGINACAO": [CallbackQueryHandler(handlers.orgao_paginacao, pattern="^orgao_")],
+            "ORGAO_PUBLICO_MANUAL": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.orgao_manual)],
+            "FIGURA_PUBLICA": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.figura_publica_input)],
+            "CARGO": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.cargo)],
+            "ASSUNTO_PALAVRA_CHAVE": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.buscar_assunto)],
+            "ASSUNTO_PAGINACAO": [CallbackQueryHandler(handlers.assunto_paginacao, pattern="^assunto_")],
+            "ASSUNTO_MANUAL": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.assunto_manual)],
+            "MUNICIPIO": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.municipio)],
+            "DATA": [
+                CallbackQueryHandler(handlers.data, pattern="^data_"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.data),
+            ],
+            "DATA_MANUAL": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.data)],
+            "FOTO": [MessageHandler(filters.PHOTO, handlers.foto)],
+            "DEMANDA_ESCOLHA": [CallbackQueryHandler(handlers.demanda, pattern="^(add_demanda|pular_demanda|fim_demandas)$")],
+            "DEMANDA_DIGITAR": [MessageHandler(filters.TEXT & ~filters.COMMAND, demanda_digitar)],
+            "OV": [MessageHandler(filters.TEXT & ~filters.COMMAND, ov)],
+            "PRO": [MessageHandler(filters.TEXT & ~filters.COMMAND, pro)],
+            "OBSERVACAO_ESCOLHA": [CallbackQueryHandler(observacao_escolha, pattern="^(add_obs|skip_obs)$")],
+            "OBSERVACAO_DIGITAR": [MessageHandler(filters.TEXT & ~filters.COMMAND, observacao_digitar)],
+            "CONFIRMACAO_FINAL": [CallbackQueryHandler(handlers.confirmacao, pattern="^(confirmar_salvar|cancelar_resumo)$")],
+        },
+        fallbacks=[CommandHandler('cancelar', cancelar)],
+    )
         application.add_handler(conv_handler)
         logger.info("Handlers de conversação ativados.")
     else:
