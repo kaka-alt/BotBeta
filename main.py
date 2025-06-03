@@ -73,25 +73,32 @@ async def set_webhook_command(update: Update, context):
     Comando para configurar o webhook do Telegram.
     Deve ser executado uma vez após o deploy do bot no Render.
     """
-    # Render injeta o hostname público do seu serviço na variável de ambiente RENDER_EXTERNAL_HOSTNAME
+    logger.info("Comando /setwebhook recebido.")
+    
     render_hostname = os.getenv("RENDER_EXTERNAL_HOSTNAME")
+    logger.info(f"Valor de RENDER_EXTERNAL_HOSTNAME: '{render_hostname}'") # Log do valor
+
     if not render_hostname:
-        await update.message.reply_text("Erro: Variável de ambiente RENDER_EXTERNAL_HOSTNAME não configurada. Não é possível definir o webhook.")
-        logger.error("RENDER_EXTERNAL_HOSTNAME não configurado. Não é possível definir o webhook.")
+        error_msg = "Erro: Variável de ambiente RENDER_EXTERNAL_HOSTNAME não configurada ou vazia. Não é possível definir o webhook."
+        await update.message.reply_text(error_msg)
+        logger.error(error_msg)
         return
 
     # Constrói a URL completa do webhook para o endpoint FastAPI
     # O Render fornece HTTPS automaticamente para seus domínios.
     full_webhook_url = f"https://{render_hostname}/webhook"
+    logger.info(f"Tentando configurar webhook para URL: {full_webhook_url}") # Log da URL completa
 
     try:
         # Define o webhook no Telegram
         await application.bot.set_webhook(url=full_webhook_url)
-        await update.message.reply_text(f"Webhook configurado com sucesso para: {full_webhook_url}")
-        logger.info(f"Webhook configurado para: {full_webhook_url}")
+        success_msg = f"Webhook configurado com sucesso para: {full_webhook_url}"
+        await update.message.reply_text(success_msg)
+        logger.info(success_msg)
     except Exception as e:
-        await update.message.reply_text(f"Falha ao configurar o webhook: {e}")
-        logger.error(f"Falha ao configurar o webhook: {e}", exc_info=True)
+        error_msg = f"Falha ao configurar o webhook: {e}"
+        await update.message.reply_text(error_msg)
+        logger.error(error_msg, exc_info=True) # Log completo da exceção
 
 # --- Endpoint FastAPI para o Webhook do Telegram ---
 @app.post("/webhook")
@@ -99,10 +106,20 @@ async def telegram_webhook_receiver(request: Request):
     """
     Endpoint FastAPI para receber atualizações do Telegram via webhook.
     """
+    logger.info("Requisição POST recebida no endpoint /webhook.") # Log de entrada no webhook
     try:
         request_json = await request.json()
+        logger.info(f"JSON recebido no webhook: {request_json}") # Log do JSON recebido
+        
         # Cria um objeto Update a partir do JSON recebido
+        # Certifique-se de que 'application' está inicializado antes de usar
+        if application is None:
+            logger.error("Erro: A instância 'application' do bot não foi inicializada no webhook.")
+            return {"status": "error", "message": "Bot application not initialized"}, 500
+
         update = Update.de_json(request_json, application.bot)
+        logger.info(f"Update do Telegram processado: {update.update_id}") # Log do update processado
+        
         # Processa a atualização usando o application do python-telegram-bot
         await application.process_update(update) 
         return {"status": "ok"}
