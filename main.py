@@ -2,161 +2,164 @@ import logging
 import os
 import threading
 from dotenv import load_dotenv
-from exportar_para_excel import export_data_to_drive
 
+from telegram import Update, Bot
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
     CallbackQueryHandler, ConversationHandler, filters
 )
-import handlers
-# A importação abaixo é uma má prática. Preferimos importar funções específicas.
-# from handlers import * # Importa todas as funções do handlers.py para serem diretamente acessíveis
+import handlers # Mantenha se você ainda usa seus handlers de conversação existentes
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 import uvicorn
 
 # --- Configuração do carregamento do arquivo .env (rail.env) ---
 # Este bloco garante que as variáveis de ambiente sejam carregadas corretamente
-# quando você roda o script localmente. No Railway, elas já serão injetadas.
+# quando você roda o script localmente. No Render, elas já serão injetadas.
 script_dir = os.path.dirname(os.path.abspath(__file__))
-dotenv_path = os.path.join(script_dir, 'rail.env')  # Caminho para o seu arquivo de variáveis locais
-load_dotenv(dotenv_path=dotenv_path)  # Carrega as variáveis do rail.env
+dotenv_path = os.path.join(script_dir, 'rail.env') # Assumindo rail.env ou .env na raiz
+load_dotenv(dotenv_path=dotenv_path)
 
 # Importa a função principal de exportação do seu arquivo exportar_para_excel.py
-# O nome da função foi corrigido para 'exportar_dados_localmente'.
-from exportar_para_excel import export_data_to_drive
+# Certifique-se de que o caminho e o nome da função estão corretos.
+from exportar_para_excel import export_data_to_drive # Se você renomeou para export_data_to_drive
+# Ou from exportar_para_excel import exportar_dados_localmente # Se você manteve o nome original
 
-# Configuração básica de logging para ver as mensagens no console/logs do Railway
+# Configuração básica de logging para ver as mensagens no console/logs do Render
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+logger = logging.getLogger(__name__)
+
+# --- Instância FastAPI ---
+app = FastAPI()
+
+# --- Instância Global do Application do python-telegram-bot ---
+# Precisamos que esta instância seja acessível tanto pelo webhook FastAPI quanto pelos handlers do bot.
+application = None 
 
 # --- Funções do Bot do Telegram ---
-async def cancelar(update, context):
+async def cancelar(update: Update, context):
     """Cancela a operação atual do usuário e limpa os dados da conversa."""
     await update.message.reply_text("Operação cancelada pelo usuário.")
     context.user_data.clear()
     return ConversationHandler.END
 
-async def start(update, context):
+async def start(update: Update, context):
     """Comando /start para iniciar a interação com o bot."""
     await update.message.reply_text("Olá! Use /iniciar para começar o registro de uma ocorrência.")
 
-def iniciar_fastapi():
-    """Função para iniciar o servidor FastAPI em uma thread separada."""
-    # O Railway define a porta em uma variável de ambiente 'PORT'.
-    # Usamos os.getenv("PORT", 8000) para pegar a porta do Railway ou usar 8000 como padrão localmente.
-    port = int(os.getenv("PORT", 8000))
-    print(f"Iniciando FastAPI na porta: {port}")
-    # uvicorn.run bloqueia a thread, por isso rodamos em uma thread separada
-    uvicorn.run(app, host="0.0.0.0", port=port)
-
-def iniciar_bot():
-    """Função para configurar e iniciar o bot do Telegram."""
-    token = os.getenv("BOT_TOKEN")
-    if not token:
-        print("Erro: BOT_TOKEN não encontrado nas variáveis de ambiente ou no arquivo .env.")
-        print("Certifique-se de que a variável BOT_TOKEN está configurada no Railway ou no rail.env local.")
-        return
-
-    application = ApplicationBuilder().token(token).build()
-
-    # Define o fluxo de conversação do bot usando ConversationHandler
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('iniciar', handlers.iniciar_colaborador)],
-        states={
-            # Mapeamento dos estados do bot para as funções handlers correspondentes
-            "COLABORADOR": [CallbackQueryHandler(handlers.colaborador_button, pattern="^colaborador_")],
-            "COLABORADOR_MANUAL": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.colaborador_manual)],
-            "ORGAO_PUBLICO_KEYWORD": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.buscar_orgao)],
-            "ORGAO_PUBLICO_PAGINACAO": [CallbackQueryHandler(handlers.orgao_paginacao, pattern="^orgao_")],
-            "ORGAO_PUBLICO_MANUAL": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.orgao_manual)],
-            "FIGURA_PUBLICA": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.figura_publica_input)],
-            "CARGO": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.cargo)],
-            "ASSUNTO_PALAVRA_CHAVE": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.buscar_assunto)],
-            "ASSUNTO_PAGINACAO": [CallbackQueryHandler(handlers.assunto_paginacao, pattern="^assunto_")],
-            "ASSUNTO_MANUAL": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.assunto_manual)],
-            "MUNICIPIO": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.municipio)],
-            "DATA": [
-                CallbackQueryHandler(handlers.data, pattern="^data_"),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.data),
-            ],
-            "DATA_MANUAL": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.data)],
-            "FOTO": [MessageHandler(filters.PHOTO, handlers.foto)],
-            "DEMANDA_ESCOLHA": [CallbackQueryHandler(handlers.demanda, pattern="^(add_demanda|pular_demanda|fim_demandas)$")],
-            # Garanta que estas funções (demanda_digitar, ov, pro, observacao_escolha, observacao_digitar)
-            # estão definidas no seu arquivo handlers.py e são importadas corretamente.
-            "DEMANDA_DIGITAR": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.demanda_digitar)],
-            "OV": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.ov)],
-            "PRO": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.pro)],
-            "OBSERVACAO_ESCOLHA": [CallbackQueryHandler(handlers.observacao_escolha, pattern="^(add_obs|skip_obs)$")],
-            "OBSERVACAO_DIGITAR": [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.observacao_digitar)],
-            "CONFIRMACAO_FINAL": [CallbackQueryHandler(handlers.confirmacao, pattern="^(confirmar_salvar|cancelar_resumo)$")],
-        },
-        fallbacks=[CommandHandler('cancelar', cancelar)],  # Permite cancelar a conversa a qualquer momento
-    )
-
-    # Adiciona os handlers ao aplicativo do bot
-    application.add_handler(CommandHandler('start', start))
-    application.add_handler(conv_handler)
-
-    # NOVO HANDLER PARA SALVAR NO ONEDRIVE (ADICIONADO AQUI)
-    application.add_handler(CommandHandler('salvar_onedrive', salvar_onedrive_telegram))
-
-    # Inicia o polling do bot para receber e processar atualizações do Telegram
-    application.run_polling()
-
-# --- Configuração e Endpoint do FastAPI ---
-app = FastAPI()
-
-@app.get("/export")
-def exportar():
+async def salvar_onedrive_telegram(update: Update, context):
     """
-    Endpoint FastAPI que é acionado para iniciar o processo de backup para o Google Drive.
-    Este endpoint será chamado por um Cron Job configurado no Railway.
-    """
-    print("Endpoint /export acionado. Iniciando backup para Google Drive...")
-    try:
-        # Chama a função principal de backup do exportar_para_excel.py
-        # Essa função se encarrega de ler do banco, gerar Excel e enviar para o Google Drive.
-        export_data_to_drive()  # Chamada corrigida
-        print("Processo de backup para Google Drive concluído (via endpoint /export).")
-        return {"status": "Exportação para Google Drive iniciada com sucesso."}
-    except Exception as e:
-        print(f"Erro ao iniciar exportação via endpoint: {e}")
-        # Loga a exceção completa para facilitar a depuração no Railway
-        logging.exception("Erro durante a execução do backup via endpoint /export")
-        return {"status": "Erro ao iniciar exportação.", "detalhes": str(e)}, 500
-
-# NOVO HANDLER PARA O COMANDO /SALVAR_ONEDRIVE (ADICIONADO AQUI)
-async def salvar_onedrive_telegram(update, context):
-    """
-    Handler para o comando /salvar_onedrive no Telegram.
-    Aciona a exportação das tabelas 'registros' e 'demandas' para o Google Drive.
+    Comando /salvar_onedrive: aciona a exportação das tabelas 'registros' e 'demandas' para o Google Drive.
     (O nome do comando ainda é OneDrive, mas a funcionalidade é Google Drive)
     """
-    logging.info(f"Comando /salvar_onedrive recebido de {update.effective_user.id}")
+    logger.info(f"Comando /salvar_onedrive recebido de {update.effective_user.id}")
     await update.message.reply_text("Iniciando a exportação dos dados para o Google Drive. Isso pode levar um momento...")
 
     try:
         # Chama a função principal de backup do exportar_para_excel.py
         # Essa função se encarrega de ler do banco, gerar Excel e enviar para o Google Drive.
-        export_data_to_drive()  # Chamada corrigida
+        # Use o nome da função que você tem no seu exportar_para_excel.py
+        export_data_to_drive() # Ou exportar_dados_localmente()
         await update.message.reply_text("Dados salvos no Google Drive com sucesso!")
     except Exception as e:
-        logging.error(f"Erro ao salvar dados no Google Drive via Telegram: {e}")
+        logging.error(f"Erro ao salvar dados no Google Drive via Telegram: {e}", exc_info=True)
         await update.message.reply_text(f"Falha ao salvar os dados no Google Drive: {e}")
 
+async def set_webhook_command(update: Update, context):
+    """
+    Comando para configurar o webhook do Telegram.
+    Deve ser executado uma vez após o deploy do bot no Render.
+    """
+    # Render injeta o hostname público do seu serviço na variável de ambiente RENDER_EXTERNAL_HOSTNAME
+    render_hostname = os.getenv("RENDER_EXTERNAL_HOSTNAME")
+    if not render_hostname:
+        await update.message.reply_text("Erro: Variável de ambiente RENDER_EXTERNAL_HOSTNAME não configurada. Não é possível definir o webhook.")
+        logger.error("RENDER_EXTERNAL_HOSTNAME não configurado. Não é possível definir o webhook.")
+        return
+
+    # Constrói a URL completa do webhook para o endpoint FastAPI
+    # O Render fornece HTTPS automaticamente para seus domínios.
+    full_webhook_url = f"https://{render_hostname}/webhook"
+
+    try:
+        # Define o webhook no Telegram
+        await application.bot.set_webhook(url=full_webhook_url)
+        await update.message.reply_text(f"Webhook configurado com sucesso para: {full_webhook_url}")
+        logger.info(f"Webhook configurado para: {full_webhook_url}")
+    except Exception as e:
+        await update.message.reply_text(f"Falha ao configurar o webhook: {e}")
+        logger.error(f"Falha ao configurar o webhook: {e}", exc_info=True)
+
+# --- Endpoint FastAPI para o Webhook do Telegram ---
+@app.post("/webhook")
+async def telegram_webhook_receiver(request: Request):
+    """
+    Endpoint FastAPI para receber atualizações do Telegram via webhook.
+    """
+    try:
+        request_json = await request.json()
+        # Cria um objeto Update a partir do JSON recebido
+        update = Update.de_json(request_json, application.bot)
+        # Processa a atualização usando o application do python-telegram-bot
+        await application.process_update(update) 
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"Erro ao processar webhook do Telegram: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}, 500
+
+# --- Função para iniciar o servidor FastAPI ---
+def iniciar_fastapi():
+    """
+    Função para iniciar o servidor FastAPI em uma thread separada.
+    Ele escutará na porta definida pela variável de ambiente PORT do Render.
+    """
+    port = int(os.getenv("PORT", 8000)) # Render injeta a variável de ambiente PORT
+    logger.info(f"Iniciando FastAPI na porta: {port}")
+    # O uvicorn.run bloqueia o thread em que é executado.
+    # Por isso, ele é iniciado em uma thread separada para não bloquear o main.
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
 # --- Ponto de Entrada Principal ---
 if __name__ == "__main__":
+    # Inicializa a instância global do Application do python-telegram-bot
+    token = os.getenv("BOT_TOKEN")
+    if not token:
+        logger.error("Erro: BOT_TOKEN não encontrado nas variáveis de ambiente ou no arquivo .env.")
+        logger.error("Certifique-se de que a variável BOT_TOKEN está configurada.")
+        exit(1) # Sai se o token não for encontrado
+
+    application = ApplicationBuilder().token(token).build()
+
+    # Adiciona os handlers de comando
+    application.add_handler(CommandHandler('start', start))
+    application.add_handler(CommandHandler('salvar_onedrive', salvar_onedrive_telegram)) # Mantenha se ainda usa
+    application.add_handler(CommandHandler('setwebhook', set_webhook_command)) # NOVO: Comando para definir o webhook
+
+    # --- Se você ainda tem handlers de conversação, adicione-os aqui ---
+    # Exemplo:
+    # conv_handler = ConversationHandler(
+    #     entry_points=[CommandHandler('iniciar', handlers.iniciar_colaborador)],
+    #     states={
+    #         # ... seus estados (igual acima) ...
+    #     },
+    #     fallbacks=[CommandHandler('cancelar', cancelar)],
+    # )
+    # application.add_handler(conv_handler)
+    # --- Fim dos handlers de conversação ---
+
     # Inicia o servidor FastAPI em uma thread separada em segundo plano.
     # `daemon=True` garante que a thread do FastAPI será encerrada se o programa principal (bot) terminar.
     threading.Thread(target=iniciar_fastapi, daemon=True).start()
 
-    # Inicia o bot do Telegram na thread principal.
-    # run_polling() do python-telegram-bot precisa rodar na thread principal para lidar
-    # corretamente com sinais do sistema (como Ctrl+C para encerrar o programa).
-    print("Iniciando bot do Telegram...")
-    iniciar_bot()
+    logger.info("Bot Telegram configurado para receber webhooks via FastAPI.")
+    logger.info("Após o deploy no Render, execute o comando /setwebhook no Telegram para configurar o webhook.")
+    logger.info("O serviço Render será ativado por requisições HTTP do webhook.")
+
+    # O thread principal simplesmente espera, permitindo que a thread FastAPI e o bot funcionem.
+    # Para garantir que o processo não termine imediatamente em alguns ambientes,
+    # você pode adicionar um loop simples ou um sleep longo, mas para Render com FastAPI daemon,
+    # o uvicorn manterá o processo vivo.
+    threading.Event().wait() # Mantém o thread principal vivo indefinidamente
