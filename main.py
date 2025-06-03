@@ -5,6 +5,7 @@ import fastapi
 from fastapi import FastAPI, Request
 # Removido threading, pois FastAPI/Uvicorn gerenciam o loop de eventos assíncrono
 from dotenv import load_dotenv
+from handlers import iniciar_colaborador  # Importe seu handler de conversa aqui
 
 from telegram import Update, Bot
 from telegram.ext import (
@@ -139,6 +140,8 @@ async def startup_event():
     application = ApplicationBuilder().token(token).build()
 
     # Adiciona os handlers de comando
+    application.add_handler(CommandHandler('cancelar', cancelar))
+    application.add_handler(CommandHandler('iniciar',iniciar_colaborador))  # Mantenha se você ainda usa seus handlers de conversação))
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('salvar_onedrive', salvar_onedrive_telegram))
     application.add_handler(CommandHandler('setwebhook', set_webhook_command))
