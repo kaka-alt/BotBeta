@@ -11,6 +11,9 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseUpload
 
+# Importar a função de conexão com o banco de dados do utils.py
+from utils import conectar_banco # Importa a função conectar_banco
+
 # Configuração de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -42,12 +45,10 @@ def get_drive_service():
     try:
         creds_info = json.loads(GOOGLE_CREDENTIALS_JSON)
         
-        # --- CORREÇÃO AQUI: Usar from_service_account_info ---
         creds = Credentials.from_service_account_info(
             info=creds_info, 
-            scopes=['https://www.googleapis.com/auth/drive'] # Escopo 'drive' para acesso total
+            scopes=['https://www.googleapis.com/auth/drive'] 
         )
-        # --- FIM DA CORREÇÃO ---
 
         service = build('drive', 'v3', credentials=creds)
         logger.info("Serviço do Google Drive API autenticado com sucesso.")
@@ -169,26 +170,35 @@ async def upload_photo_to_drive(file_bytes: bytes, filename: str) -> str | None:
 
 def export_data_to_drive():
     """
-    Esta é a sua função existente para exportar dados para CSVs no Google Drive.
-    Mantenha sua lógica original aqui.
+    Exporta os dados das tabelas 'registros' e 'demandas' do PostgreSQL para CSVs no Google Drive.
     """
-    logger.info("Executando a função export_data_to_drive (lógica de CSV).")
+    logger.info("Iniciando exportação de dados do PostgreSQL para CSVs no Google Drive.")
+    conn = None
     try:
         service = get_drive_service()
         folder_id_csv = GOOGLE_DRIVE_FOLDER_ID 
         
-        # --- Sua lógica original de exportação de CSVs para o Drive aqui ---
-        # Exemplo:
-        # data_registros = {'coluna1': ['valor1'], 'coluna2': ['valor2']}
-        # df_registros = pd.DataFrame(data_registros)
-        # _upload_or_update_csv(service, "registros.csv", df_registros, folder_id_csv)
+        conn = conectar_banco()
+        if conn is None:
+            logger.error("Não foi possível conectar ao banco de dados para exportar CSVs.")
+            return
 
-        # data_demandas = {'colunaA': ['valorA'], 'colunaB': ['valorB']}
-        # df_demandas = pd.DataFrame(data_demandas)
-        # _upload_or_update_csv(service, "demandas.csv", df_demandas, folder_id_csv)
+        # --- Exportar tabela 'registros' ---
+        df_registros = pd.read_sql("SELECT * FROM registros", conn)
+        _upload_or_update_csv(service, "registros.csv", df_registros, folder_id_csv)
+        logger.info("CSV 'registros.csv' exportado para o Google Drive.")
+
+        # --- Exportar tabela 'demandas' ---
+        df_demandas = pd.read_sql("SELECT * FROM demandas", conn)
+        _upload_or_update_csv(service, "demandas.csv", df_demandas, folder_id_csv)
+        logger.info("CSV 'demandas.csv' exportado para o Google Drive.")
         
-        logger.info("Lógica de exportação de CSVs para o Drive concluída.")
+        logger.info("Exportação de CSVs do PostgreSQL para o Drive concluída com sucesso.")
+
     except Exception as e:
-        logger.error(f"Erro na função export_data_to_drive: {e}", exc_info=True)
+        logger.error(f"Erro durante a exportação de CSVs do PostgreSQL para o Drive: {e}", exc_info=True)
         raise
+    finally:
+        if conn:
+            conn.close() # Garante que a conexão com o banco seja fechada
 
