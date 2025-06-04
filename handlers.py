@@ -463,7 +463,7 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.HTML
     )
 
-    return CONFIRMACAO_FINAL # Retorna o estado CONFIRMACAO_FINAL
+    return 'CONFIRMACAO_FINAL' # Retorna o estado CONFIRMACAO_FINAL
 
 
 # --- Confirmar ---
