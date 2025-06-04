@@ -31,7 +31,7 @@ async def iniciar_colaborador(update: Update, context: ContextTypes.DEFAULT_TYPE
     buttons.append(InlineKeyboardButton("Outro", callback_data="colaborador_outro"))
     keyboard = InlineKeyboardMarkup(utils.build_menu(buttons, n_cols=2))
     await update.message.reply_text("👨‍💼 Selecione o colaborador ou clique em Outro para digitar manualmente:", reply_markup=keyboard)
-    return COLABORADOR # Retorna o estado COLABORADOR
+    return 'COLABORADOR' # Retorna o estado COLABORADOR
 
 # Cria botoes para a paginação de colaboradores
 async def colaborador_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -41,13 +41,13 @@ async def colaborador_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if data == "colaborador_outro":
         await query.message.reply_text("👨‍💼 Digite o nome do colaborador:")
-        return COLABORADOR_MANUAL # Retorna o estado COLABORADOR_MANUAL
+        return 'COLABORADOR_MANUAL' # Retorna o estado COLABORADOR_MANUAL
     else:
         colaborador = data.replace("colaborador_", "")
         context.user_data['colaborador'] = colaborador
         await query.message.reply_text(f"Colaborador selecionado: {colaborador}")
         await query.message.reply_text("🏠 Agora, digite uma palavra-chave para buscar o órgão público:")
-        return ORGAO_PUBLICO_KEYWORD # Retorna o estado ORGAO_PUBLICO_KEYWORD
+        return 'ORGAO_PUBLICO_KEYWORD' # Retorna o estado ORGAO_PUBLICO_KEYWORD
 
 #função chamada quando o usuário digita manualmente o colaborador
 async def colaborador_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -55,7 +55,7 @@ async def colaborador_manual(update: Update, context: ContextTypes.DEFAULT_TYPE)
     context.user_data['colaborador'] = nome
     await update.message.reply_text(f"Nome do colaborador registrado: {nome}")
     await update.message.reply_text("🏠 Agora, digite uma palavra-chave para buscar o órgão público:")
-    return ORGAO_PUBLICO_KEYWORD # Retorna o estado ORGAO_PUBLICO_KEYWORD
+    return 'ORGAO_PUBLICO_KEYWORD' # Retorna o estado ORGAO_PUBLICO_KEYWORD
 
 
 # --- Órgão público ---
@@ -68,12 +68,12 @@ async def buscar_orgao(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not resultados:
         await update.message.reply_text("❗ Nenhum órgão encontrado. Digite manualmente o nome do órgão público:")
-        return ORGAO_PUBLICO_MANUAL # Retorna o estado ORGAO_PUBLICO_MANUAL
+        return 'ORGAO_PUBLICO_MANUAL' # Retorna o estado ORGAO_PUBLICO_MANUAL
 
     buttons, pagina_atual = utils.botoes_pagina(resultados, 0, prefix="orgao_")
     keyboard = InlineKeyboardMarkup(buttons)
     await update.message.reply_text(f"Resultados encontrados : {len(resultados)}", reply_markup=keyboard)
-    return ORGAO_PUBLICO_PAGINACAO # Retorna o estado ORGAO_PUBLICO_PAGINACAO
+    return 'ORGAO_PUBLICO_PAGINACAO' # Retorna o estado ORGAO_PUBLICO_PAGINACAO
 
 #Função que controla as paginas de órgãos públicos
 async def orgao_paginacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -89,30 +89,30 @@ async def orgao_paginacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["orgao_pagina"] = pagina_atual
         botoes, _ = utils.botoes_pagina(resultados, pagina_atual, prefix="orgao_")
         await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(botoes))
-        return ORGAO_PUBLICO_PAGINACAO # Retorna o estado ORGAO_PUBLICO_PAGINACAO
+        return 'ORGAO_PUBLICO_PAGINACAO' # Retorna o estado ORGAO_PUBLICO_PAGINACAO
 
     elif data == "orgao_voltar":
         pagina_atual = max(0, pagina_atual - 1)
         context.user_data["orgao_pagina"] = pagina_atual
         botoes, _ = utils.botoes_pagina(resultados, pagina_atual, prefix="orgao_")
         await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(botoes))
-        return ORGAO_PUBLICO_PAGINACAO # Retorna o estado ORGAO_PUBLICO_PAGINACAO
+        return 'ORGAO_PUBLICO_PAGINACAO' # Retorna o estado ORGAO_PUBLICO_PAGINACAO
 
     elif data == "orgao_inserir_manual":
         await query.message.reply_text("✍️ Digite manualmente o nome do órgão público:")
-        return ORGAO_PUBLICO_MANUAL # Retorna o estado ORGAO_PUBLICO_MANUAL
+        return 'ORGAO_PUBLICO_MANUAL' # Retorna o estado ORGAO_PUBLICO_MANUAL
 
     elif data == "orgao_refazer_busca":
         await query.message.reply_text("🔎 Digite uma nova palavra-chave para buscar o órgão:")
-        return ORGAO_PUBLICO_KEYWORD # Retorna o estado ORGAO_PUBLICO_KEYWORD
-    
+        return 'ORGAO_PUBLICO_KEYWORD' # Retorna o estado ORGAO_PUBLICO_KEYWORD
+
     else:
         orgao_selecionado = data.replace("orgao_", "")
         context.user_data["orgao_publico"] = orgao_selecionado
         await query.message.reply_text(f"🏢 Órgão selecionado: {orgao_selecionado}")
         await query.message.reply_text("🧥 Digite o nome da figura pública:")
-        return FIGURA_PUBLICA # Retorna o estado FIGURA_PUBLICA
-    
+        return 'FIGURA_PUBLICA' # Retorna o estado FIGURA_PUBLICA
+
 # Função chamada quando o usuário digita manualmente o órgão público
 async def orgao_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nome = update.message.text.strip()
@@ -120,7 +120,7 @@ async def orgao_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
     utils.salvar_orgao(nome)  
     await update.message.reply_text(f"✔️ Órgão público registrado manualmente: {nome}")
     await update.message.reply_text("🧥 Digite o nome da figura pública:")
-    return FIGURA_PUBLICA # Retorna o estado FIGURA_PUBLICA
+    return 'FIGURA_PUBLICA' # Retorna o estado FIGURA_PUBLICA
 
 
 # --- Figura pública ---
@@ -129,7 +129,7 @@ async def figura_publica_input(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data['figura_publica'] = figura_publica
     await update.message.reply_text(f"✔️ Figura pública registrada: {figura_publica}.")
     await update.message.reply_text("🧥 Digite o Cargo:")
-    return CARGO # Retorna o estado CARGO
+    return 'CARGO' # Retorna o estado CARGO
 
 
 # --- Cargo ---
@@ -138,7 +138,7 @@ async def cargo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['cargo'] = cargo
     await update.message.reply_text(f"✔️ Cargo registrado: {cargo}")
     await update.message.reply_text("✉️ Digite o Assunto:")
-    return ASSUNTO_PALAVRA_CHAVE # Retorna o estado ASSUNTO_PALAVRA_CHAVE
+    return 'ASSUNTO_PALAVRA_CHAVE' # Retorna o estado ASSUNTO_PALAVRA_CHAVE
 
 
 # --- Assunto ---
@@ -151,12 +151,12 @@ async def buscar_assunto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not resultados:
         await update.message.reply_text("❗ Nenhum assunto encontrado. Digite manualmente o assunto:")
-        return ASSUNTO_MANUAL # Retorna o estado ASSUNTO_MANUAL
-    
+        return 'ASSUNTO_MANUAL' # Retorna o estado ASSUNTO_MANUAL
+
     buttons, pagina_atual = utils.botoes_pagina(resultados, 0, prefix="assunto_")
     keyboard = InlineKeyboardMarkup(buttons)
     await update.message.reply_text(f"Resultados encontrados (página {pagina_atual + 1}):", reply_markup=keyboard)
-    return ASSUNTO_PAGINACAO # Retorna o estado ASSUNTO_PAGINACAO
+    return 'ASSUNTO_PAGINACAO' # Retorna o estado ASSUNTO_PAGINACAO
 
 # Função que controla as páginas de assuntos
 async def assunto_paginacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -172,29 +172,29 @@ async def assunto_paginacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["assunto_pagina"] = pagina_atual
         botoes, _ = utils.botoes_pagina(resultados, pagina_atual, prefix="assunto_")
         await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(botoes))
-        return ASSUNTO_PAGINACAO # Retorna o estado ASSUNTO_PAGINACAO
+        return 'ASSUNTO_PAGINACAO' # Retorna o estado ASSUNTO_PAGINACAO
 
     elif data == "assunto_voltar":
         pagina_atual = max(0, pagina_atual - 1)
         context.user_data["assunto_pagina"] = pagina_atual
         botoes, _ = utils.botoes_pagina(resultados, pagina_atual, prefix="assunto_")
         await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(botoes))
-        return ASSUNTO_PAGINACAO # Retorna o estado ASSUNTO_PAGINACAO
+        return 'ASSUNTO_PAGINACAO' # Retorna o estado ASSUNTO_PAGINACAO
 
     elif data == "assunto_inserir_manual":
         await query.message.reply_text("✍️ Digite manualmente o nome do assunto:")
-        return ASSUNTO_MANUAL # Retorna o estado ASSUNTO_MANUAL
+        return 'ASSUNTO_MANUAL'  # Retorna o estado ASSUNTO_MANUAL
 
     elif data == "assunto_refazer_busca":
         await query.message.reply_text("🔎 Digite uma nova palavra-chave para buscar o assunto:")
-        return ASSUNTO_PALAVRA_CHAVE # Retorna o estado ASSUNTO_PALAVRA_CHAVE
-    
+        return 'ASSUNTO_PALAVRA_CHAVE' # Retorna o estado ASSUNTO_PALAVRA_CHAVE
+
     else:
         assunto_selecionado = data.replace("assunto_", "")
         context.user_data["assunto"] = assunto_selecionado
         await query.message.reply_text(f"📌 Assunto selecionado: {assunto_selecionado}")
         await query.message.reply_text("🏙️ Digite o município:")
-        return MUNICIPIO # Retorna o estado MUNICIPIO
+        return 'MUNICIPIO' # Retorna o estado MUNICIPIO
 
 async def assunto_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
     assunto = update.message.text.strip()
@@ -202,7 +202,7 @@ async def assunto_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
     utils.salvar_assunto(assunto) 
     await update.message.reply_text(f"✔️ Assunto registrado: {assunto}")
     await update.message.reply_text("🏙️ Digite o município:")
-    return MUNICIPIO # Retorna o estado MUNICIPIO
+    return 'MUNICIPIO' # Retorna o estado MUNICIPIO
 
 
 # --- Município ---
@@ -224,7 +224,7 @@ async def solicitar_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.callback_query:
         await update.callback_query.message.reply_text("Selecione uma opção para a data:", reply_markup=keyboard)
 
-    return DATA # Retorna o estado DATA
+    return 'DATA' # Retorna o estado DATA
 
 async def data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query:
@@ -236,11 +236,11 @@ async def data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['data'] = dt.strftime("%Y-%m-%d")
             await query.message.edit_text(f"✔️ Data registrada: {dt.strftime('%Y/%m/%d')}")
             await query.message.reply_text("📷 Por favor, envie a foto:")
-            return FOTO # Retorna o estado FOTO
+            return 'FOTO' # Retorna o estado FOTO
 
         elif query.data == "data_manual":
             await query.message.edit_text("Digite a data no formato AAAA/MM/DD:")
-            return DATA_MANUAL # Retorna o estado DATA_MANUAL
+            return 'DATA_MANUAL' # Retorna o estado DATA_MANUAL
 
     else: # Se a entrada for um texto (data manual)
         texto = update.message.text.strip()
@@ -252,14 +252,14 @@ async def data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return FOTO # Retorna o estado FOTO
         except ValueError:
             await update.message.reply_text("❗ Formato inválido. Digite a data no formato AAAA/MM/DD:") # Corrigido para AAAA/MM/DD
-            return DATA_MANUAL # Retorna o estado DATA_MANUAL
+            return 'DATA_MANUAL' # Retorna o estado DATA_MANUAL
 
 
 # --- Foto ---
 async def foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.photo:
         await update.message.reply_text("❗ Por favor, envie uma foto válida.")
-        return FOTO # Retorna o estado FOTO
+        return 'FOTO' # Retorna o estado FOTO
 
     photo = update.message.photo[-1] # Pega a maior resolução da foto
     
@@ -288,7 +288,7 @@ async def foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["foto"] = "Erro no upload" # Indica falha no upload
         logger.error("Falha ao enviar foto para o Google Drive.")
         await update.message.reply_text("❗ Ocorreu um erro ao enviar a foto para o Google Drive. Por favor, tente novamente.")
-        return FOTO # Permanece no estado FOTO para nova tentativa
+        return 'FOTO' # Permanece no estado FOTO para nova tentativa
 
     context.user_data["demandas"] = [] # Inicializa a lista de demandas
 
@@ -300,7 +300,7 @@ async def foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(buttons)
 
     await update.message.reply_text("Quer adicionar uma demanda?", reply_markup=reply_markup)
-    return DEMANDA_ESCOLHA # Retorna o estado DEMANDA_ESCOLHA
+    return 'DEMANDA_ESCOLHA' # Retorna o estado DEMANDA_ESCOLHA
 
 # --- Demanda ---
 async def demanda(update, context):
@@ -311,7 +311,7 @@ async def demanda(update, context):
 
     if data == "add_demanda":
         await query.edit_message_text("Por favor, digite a demanda:")
-        return DEMANDA_DIGITAR # Retorna o estado DEMANDA_DIGITAR
+        return 'DEMANDA_DIGITAR' # Retorna o estado DEMANDA_DIGITAR
 
     elif data == "fim_demandas":
         await query.edit_message_text("Finalizando demandas. Vamos para o resumo...")
@@ -328,13 +328,13 @@ async def demanda_digitar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "texto": update.message.text
     }
     await update.message.reply_text("Informe o número do OV:")
-    return OV # Retorna o estado OV
+    return 'OV'  # Retorna o estado OV
 
 # Receber OV
 async def ov(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["nova_demanda"]["ov"] = update.message.text
     await update.message.reply_text("Informe o número do PRO:")
-    return PRO # Retorna o estado PRO
+    return 'PRO'  # Retorna o estado PRO
 
 # Receber PRO
 async def pro(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -346,7 +346,7 @@ async def pro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("Deseja adicionar uma observação?", reply_markup=reply_markup)
-    return OBSERVACAO_ESCOLHA # Retorna o estado OBSERVACAO_ESCOLHA
+    return 'OBSERVACAO_ESCOLHA'  # Retorna o estado OBSERVACAO_ESCOLHA
 
 # Escolha de observação
 async def observacao_escolha(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -355,7 +355,7 @@ async def observacao_escolha(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     if query.data == "add_obs":
         await query.message.reply_text("Digite a observação:")
-        return OBSERVACAO_DIGITAR # Retorna o estado OBSERVACAO_DIGITAR
+        return 'OBSERVACAO_DIGITAR'  # Retorna o estado OBSERVACAO_DIGITAR
     else:
         context.user_data["nova_demanda"]["observacao"] = ""
         return await salvar_demanda(update, context)
@@ -388,7 +388,7 @@ async def salvar_demanda(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "✅ Demanda adicionada com sucesso! Deseja adicionar outra?",
             reply_markup=reply_markup
         )
-    return DEMANDA_ESCOLHA # Retorna o estado DEMANDA_ESCOLHA
+    return 'DEMANDA_ESCOLHA'  # Retorna o estado DEMANDA_ESCOLHA
 
 
 # Lidar com escolha de mais demandas
@@ -398,7 +398,7 @@ async def mais_demandas(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "add_demanda":
         await query.message.reply_text("Digite a próxima demanda:")
-        return DEMANDA_DIGITAR # Retorna o estado DEMANDA_DIGITAR
+        return 'DEMANDA_DIGITAR'  # Retorna o estado DEMANDA_DIGITAR
     else:
         return await resumo(update, context) # Chama resumo e retorna seu estado
     
