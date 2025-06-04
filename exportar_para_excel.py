@@ -5,7 +5,8 @@ import pandas as pd
 from datetime import datetime
 from io import BytesIO
 
-from google.oauth2.credentials import Credentials
+# Importação CORRETA para credenciais de conta de serviço
+from google.oauth2.service_account import Credentials 
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseUpload
@@ -16,9 +17,7 @@ logger = logging.getLogger(__name__)
 
 # --- Variáveis de Ambiente para Google Drive (lidas do ambiente do Render) ---
 GOOGLE_CREDENTIALS_JSON = os.environ.get("GOOGLE_CREDENTIALS_JSON")
-# Pasta principal para CSVs (já existente)
 GOOGLE_DRIVE_FOLDER_ID = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
-# NOVO: Pasta específica para fotos
 GOOGLE_DRIVE_PHOTOS_FOLDER_ID = os.environ.get("GOOGLE_DRIVE_PHOTOS_FOLDER_ID")
 
 
@@ -42,7 +41,14 @@ def get_drive_service():
     
     try:
         creds_info = json.loads(GOOGLE_CREDENTIALS_JSON)
-        creds = Credentials.from_authorized_user_info(info=creds_info, scopes=['https://www.googleapis.com/auth/drive']) 
+        
+        # --- CORREÇÃO AQUI: Usar from_service_account_info ---
+        creds = Credentials.from_service_account_info(
+            info=creds_info, 
+            scopes=['https://www.googleapis.com/auth/drive'] # Escopo 'drive' para acesso total
+        )
+        # --- FIM DA CORREÇÃO ---
+
         service = build('drive', 'v3', credentials=creds)
         logger.info("Serviço do Google Drive API autenticado com sucesso.")
         return service
@@ -126,7 +132,6 @@ def _upload_or_update_csv(service, filename: str, df: pd.DataFrame, folder_id: s
             logger.error(f"Erro inesperado ao criar arquivo CSV '{filename}': {e}", exc_info=True)
             raise
 
-# --- Função para upload de fotos (AGORA USANDO GOOGLE_DRIVE_PHOTOS_FOLDER_ID) ---
 async def upload_photo_to_drive(file_bytes: bytes, filename: str) -> str | None:
     """
     Faz o upload de uma foto para o Google Drive na pasta de fotos específica.
@@ -135,15 +140,14 @@ async def upload_photo_to_drive(file_bytes: bytes, filename: str) -> str | None:
     try:
         service = get_drive_service()
         
-        # Usa a pasta específica para fotos, ou a pasta principal se não definida
         target_folder_id = GOOGLE_DRIVE_PHOTOS_FOLDER_ID if GOOGLE_DRIVE_PHOTOS_FOLDER_ID else GOOGLE_DRIVE_FOLDER_ID
         
         file_metadata = {
             'name': filename,
-            'mimeType': 'image/jpeg' # Ou 'image/png' dependendo do formato da foto
+            'mimeType': 'image/jpeg' 
         }
         if target_folder_id:
-            file_metadata['parents'] = [target_folder_id] # Define a pasta de destino
+            file_metadata['parents'] = [target_folder_id] 
 
         media = MediaIoBaseUpload(BytesIO(file_bytes), mimetype='image/jpeg', resumable=True)
         
@@ -163,7 +167,6 @@ async def upload_photo_to_drive(file_bytes: bytes, filename: str) -> str | None:
         logger.error(f"Erro inesperado ao fazer upload da foto para o Drive: {e}", exc_info=True)
         return None
 
-# --- Sua função export_data_to_drive existente ---
 def export_data_to_drive():
     """
     Esta é a sua função existente para exportar dados para CSVs no Google Drive.
@@ -172,7 +175,6 @@ def export_data_to_drive():
     logger.info("Executando a função export_data_to_drive (lógica de CSV).")
     try:
         service = get_drive_service()
-        # Para CSVs, ainda usa a pasta principal GOOGLE_DRIVE_FOLDER_ID
         folder_id_csv = GOOGLE_DRIVE_FOLDER_ID 
         
         # --- Sua lógica original de exportação de CSVs para o Drive aqui ---
