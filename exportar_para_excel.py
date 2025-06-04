@@ -27,9 +27,9 @@ GOOGLE_DRIVE_PHOTOS_FOLDER_ID = os.environ.get("GOOGLE_DRIVE_PHOTOS_FOLDER_ID")
 if not GOOGLE_CREDENTIALS_JSON:
     logger.error("GOOGLE_CREDENTIALS_JSON não definida. As funções do Drive não poderão ser usadas.")
 if not GOOGLE_DRIVE_FOLDER_ID:
-    logger.warning("GOOGLE_DRIVE_FOLDER_ID não definida. CSVs serão salvos na raiz do Drive.")
+    logger.warning("GOOGLE_DRIVE_FOLDER_ID não definida. Arquivos Excel serão salvos na raiz do Drive.")
 if not GOOGLE_DRIVE_PHOTOS_FOLDER_ID:
-    logger.warning("GOOGLE_DRIVE_PHOTOS_FOLDER_ID não definida. Fotos serão salvas na pasta principal de CSVs ou na raiz do Drive.")
+    logger.warning("GOOGLE_DRIVE_PHOTOS_FOLDER_ID não definida. Fotos serão salvas na pasta principal de Excel ou na raiz do Drive.")
 
 
 # --- Funções Auxiliares para Google Drive ---
@@ -96,41 +96,45 @@ def _download_file_content(service, file_id: str) -> str:
         logger.error(f"Erro inesperado ao baixar conteúdo do arquivo {file_id}: {e}", exc_info=True)
         raise
 
-def _upload_or_update_csv(service, filename: str, df: pd.DataFrame, folder_id: str = None):
+# --- FUNÇÃO ATUALIZADA PARA UPLOAD DE EXCEL (XLSX) ---
+def _upload_or_update_excel(service, filename: str, df: pd.DataFrame, folder_id: str = None):
     """
-    Cria um novo arquivo CSV no Google Drive ou sobrescreve um existente
+    Cria um novo arquivo XLSX no Google Drive ou sobrescreve um existente
     com o conteúdo do DataFrame fornecido.
     """
     file_id = _get_file_id_by_name(service, filename, folder_id)
     
-    csv_content_bytes = df.to_csv(index=False, encoding='utf-8').encode('utf-8')
+    # Salva o DataFrame em um buffer de bytes no formato XLSX
+    excel_buffer = BytesIO()
+    df.to_excel(excel_buffer, index=False, engine='openpyxl')
+    excel_buffer.seek(0) # Volta para o início do buffer
     
-    media_body = MediaIoBaseUpload(BytesIO(csv_content_bytes),
-                                   mimetype='text/csv',
+    media_body = MediaIoBaseUpload(excel_buffer,
+                                   mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                                    resumable=True)
 
     if file_id:
         try:
             service.files().update(fileId=file_id, media_body=media_body).execute()
-            logger.info(f"Arquivo CSV '{filename}' atualizado no Google Drive (ID: {file_id}).")
+            logger.info(f"Arquivo Excel '{filename}' atualizado no Google Drive (ID: {file_id}).")
         except HttpError as error:
-            logger.error(f"Erro ao atualizar arquivo CSV '{filename}' (ID: {file_id}): {error}")
+            logger.error(f"Erro ao atualizar arquivo Excel '{filename}' (ID: {file_id}): {error}")
             raise
         except Exception as e:
-            logger.error(f"Erro inesperado ao atualizar arquivo CSV '{filename}' (ID: {file_id}): {e}", exc_info=True)
+            logger.error(f"Erro inesperado ao atualizar arquivo Excel '{filename}' (ID: {file_id}): {e}", exc_info=True)
             raise
     else:
-        file_metadata = {'name': filename, 'mimeType': 'text/csv'}
+        file_metadata = {'name': filename, 'mimeType': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}
         if folder_id:
             file_metadata['parents'] = [folder_id]
         try:
             file = service.files().create(body=file_metadata, media_body=media_body, fields='id').execute()
-            logger.info(f"Arquivo CSV '{filename}' criado no Google Drive com ID: '{file.get('id')}'")
+            logger.info(f"Arquivo Excel '{filename}' criado no Google Drive com ID: '{file.get('id')}'")
         except HttpError as error:
-            logger.error(f"Erro ao criar arquivo CSV '{filename}': {error}")
+            logger.error(f"Erro ao criar arquivo Excel '{filename}': {error}")
             raise
         except Exception as e:
-            logger.error(f"Erro inesperado ao criar arquivo CSV '{filename}': {e}", exc_info=True)
+            logger.error(f"Erro inesperado ao criar arquivo Excel '{filename}': {e}", exc_info=True)
             raise
 
 async def upload_photo_to_drive(file_bytes: bytes, filename: str) -> str | None:
@@ -170,33 +174,33 @@ async def upload_photo_to_drive(file_bytes: bytes, filename: str) -> str | None:
 
 def export_data_to_drive():
     """
-    Exporta os dados das tabelas 'registros' e 'demandas' do PostgreSQL para CSVs no Google Drive.
+    Exporta os dados das tabelas 'registros' e 'demandas' do PostgreSQL para arquivos Excel (XLSX) no Google Drive.
     """
-    logger.info("Iniciando exportação de dados do PostgreSQL para CSVs no Google Drive.")
+    logger.info("Iniciando exportação de dados do PostgreSQL para arquivos Excel (XLSX) no Google Drive.")
     conn = None
     try:
         service = get_drive_service()
-        folder_id_csv = GOOGLE_DRIVE_FOLDER_ID 
-        
+        folder_id_excel = GOOGLE_DRIVE_FOLDER_ID # Pasta principal para Excel
+
         conn = conectar_banco()
         if conn is None:
-            logger.error("Não foi possível conectar ao banco de dados para exportar CSVs.")
+            logger.error("Não foi possível conectar ao banco de dados para exportar Excel.")
             return
 
-        # --- Exportar tabela 'registros' ---
+        # --- Exportar tabela 'registros' para XLSX ---
         df_registros = pd.read_sql("SELECT * FROM registros", conn)
-        _upload_or_update_csv(service, "registros.csv", df_registros, folder_id_csv)
-        logger.info("CSV 'registros.csv' exportado para o Google Drive.")
+        _upload_or_update_excel(service, "registros.xlsx", df_registros, folder_id_excel) # Alterado para .xlsx
+        logger.info("Arquivo Excel 'registros.xlsx' exportado para o Google Drive.")
 
-        # --- Exportar tabela 'demandas' ---
+        # --- Exportar tabela 'demandas' para XLSX ---
         df_demandas = pd.read_sql("SELECT * FROM demandas", conn)
-        _upload_or_update_csv(service, "demandas.csv", df_demandas, folder_id_csv)
-        logger.info("CSV 'demandas.csv' exportado para o Google Drive.")
+        _upload_or_update_excel(service, "demandas.xlsx", df_demandas, folder_id_excel) # Alterado para .xlsx
+        logger.info("Arquivo Excel 'demandas.xlsx' exportado para o Google Drive.")
         
-        logger.info("Exportação de CSVs do PostgreSQL para o Drive concluída com sucesso.")
+        logger.info("Exportação de arquivos Excel (XLSX) do PostgreSQL para o Drive concluída com sucesso.")
 
     except Exception as e:
-        logger.error(f"Erro durante a exportação de CSVs do PostgreSQL para o Drive: {e}", exc_info=True)
+        logger.error(f"Erro durante a exportação de arquivos Excel (XLSX) do PostgreSQL para o Drive: {e}", exc_info=True)
         raise
     finally:
         if conn:
