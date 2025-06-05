@@ -1,12 +1,16 @@
-import csv
+import json
 import os
 import pandas as pd
 from telegram import InlineKeyboardButton
 from datetime import datetime
 from config import *
 from globals import user_data
-import psycopg2  
+import psycopg2 
 import urllib.parse
+import logging
+import csv
+
+logger = logging.getLogger(__name__)
 
 # Funções utilitárias para o bot
 
@@ -26,7 +30,6 @@ def botoes_pagina(lista, pagina, prefix="", por_pagina=5):
         for item in sublista
     ]
 
-    # Adicione paginação e botões extras aqui se quiser
     buttons.append([
         InlineKeyboardButton("⬅️ Voltar", callback_data=f"{prefix}voltar"),
         InlineKeyboardButton("➡️ Próximo", callback_data=f"{prefix}proximo"),
@@ -46,19 +49,15 @@ def ler_orgaos_csv():
 def salvar_orgao(novo_orgao: str):
     caminho_orgaos = CSV_ORGAOS
 
-    # Garante que a pasta existe
     os.makedirs(os.path.dirname(caminho_orgaos), exist_ok=True)
 
-    # Remove espaços extras e padroniza
     novo_orgao = novo_orgao.strip()
 
-    # Verifica se o órgão já existe
     orgaos_existentes = set()
     if os.path.exists(caminho_orgaos):
         with open(caminho_orgaos, mode='r', encoding='utf-8') as f:
             orgaos_existentes = {linha.strip() for linha in f.readlines()}
 
-    # Se não existe, adiciona
     if novo_orgao and novo_orgao not in orgaos_existentes:
         with open(caminho_orgaos, mode='a', newline='', encoding='utf-8') as f:
             f.write(f"{novo_orgao}\n")
@@ -71,29 +70,24 @@ def ler_assuntos_csv():
 def salvar_assunto(novo_assunto: str):
     caminho_assuntos = CSV_ASSUNTOS
 
-    # Garante que a pasta existe
     os.makedirs(os.path.dirname(caminho_assuntos), exist_ok=True)
 
-    # Remove espaços extras e padroniza
     novo_assunto = novo_assunto.strip()
 
-    # Verifica se o assunto já existe
     assuntos_existentes = set()
     if os.path.exists(caminho_assuntos):
         with open(caminho_assuntos, mode='r', encoding='utf-8') as f:
             assuntos_existentes = {linha.strip() for linha in f.readlines()}
 
-    # Se não existe, adiciona
     if novo_assunto and novo_assunto not in assuntos_existentes:
         with open(caminho_assuntos, mode='a', newline='', encoding='utf-8') as f:
             f.write(f"{novo_assunto}\n")
 
-# Salvamento de CSV em pasta externa
+# Salvamento de CSV em pasta externa (Função original que não está sendo chamada diretamente no fluxo principal)
 def salvar_csv(data: dict):
-    print("DADOS A SEREM SALVOS:", data)
+    logger.info(f"DADOS A SEREM SALVOS (salvar_csv): {data}") # Alterado para logger.info
 
     ano, semana, _ = datetime.now().isocalendar()
-    # Garante pastas
     pasta_data = os.path.join(CAMINHO_BASE, "data")
     pasta_backup = os.path.join(pasta_data, "backup")
     pasta_semanal = os.path.join(pasta_data, "semanal")
@@ -101,23 +95,17 @@ def salvar_csv(data: dict):
     os.makedirs(pasta_data, exist_ok=True)
     os.makedirs(pasta_backup, exist_ok=True)
 
-    # Arquivo principal (fixo)
     caminho_principal = CSV_REGISTRO
-
     caminho_semanal = os.path.join(pasta_semanal, f"{ano}-semana-{semana}-registros.csv")
-
-    # Arquivo de backup diário
     data_hoje = datetime.now().strftime('%Y-%m-%d')
     caminho_backup = os.path.join(pasta_backup, f"{data_hoje}-backup.csv")
 
-    # Cabeçalhos
     cabecalho = [
         'colaborador', 'orgao_publico', 'figura_publica', 'cargo',
-        'assunto', 'municipio', 'data', 'foto',
+        'assunto', 'municipio', 'data', 'foto', 'tipo_visita', # ADICIONADO: 'tipo_visita'
         'demanda', 'ov', 'pro', 'observacao'
     ]
 
-    # Função para escrever nos arquivos
     def escrever_linhas_csv(caminho_arquivo):
         arquivo_existe = os.path.isfile(caminho_arquivo)
         with open(caminho_arquivo, mode='a', newline='', encoding='utf-8') as arquivo:
@@ -136,6 +124,7 @@ def salvar_csv(data: dict):
                         'municipio': data.get('municipio'),
                         'data': data.get('data'),
                         'foto': data.get('foto'),
+                        'tipo_visita': data.get('tipo_visita'), # ADICIONADO: 'tipo_visita'
                         'demanda': demanda.get('texto'),
                         'ov': demanda.get('ov'),
                         'pro': demanda.get('pro'),
@@ -143,7 +132,6 @@ def salvar_csv(data: dict):
                     }
                     writer.writerow(linha)
             else:
-                # Escreve uma linha mesmo sem demandas
                 linha = {
                     'colaborador': data.get('colaborador'),
                     'orgao_publico': data.get('orgao_publico'),
@@ -153,6 +141,7 @@ def salvar_csv(data: dict):
                     'municipio': data.get('municipio'),
                     'data': data.get('data'),
                     'foto': data.get('foto'),
+                    'tipo_visita': data.get('tipo_visita'), # ADICIONADO: 'tipo_visita'
                     'demanda': '',
                     'ov': '',
                     'pro': '',
@@ -160,23 +149,18 @@ def salvar_csv(data: dict):
                 }
                 writer.writerow(linha)
 
-    # Salva no CSV principal (fixo)
     escrever_linhas_csv(caminho_principal)
-
-    # Salva no backup diário
     escrever_linhas_csv(caminho_backup)
-
-    # Salva no CSV semanal
     escrever_linhas_csv(caminho_semanal)
 
-# --- NOVAS FUNÇÕES PARA POSTGRESQL ---
+# --- FUNÇÕES PARA POSTGRESQL ---
 def conectar_banco():
     """Conecta ao banco de dados PostgreSQL."""
     try:
         url = os.environ.get("DATABASE_PUBLIC_URL")
         parsed_url = urllib.parse.urlparse(url)
 
-        dbname = parsed_url.path[1:]  # Remove a primeira barra
+        dbname = parsed_url.path[1:] 
         user = parsed_url.username
         password = parsed_url.password
         host = parsed_url.hostname
@@ -191,38 +175,37 @@ def conectar_banco():
         )
         return conn
     except psycopg2.Error as e:
-        print(f"Erro ao conectar ao banco de dados: {e}")
+        logger.error(f"Erro ao conectar ao banco de dados: {e}") # Alterado para logger.error
         return None
 
 def salvar_no_banco(data: dict):
     """Salva os dados no banco de dados PostgreSQL."""
 
-    conn = conectar_banco()  # Conecta ao banco
+    conn = conectar_banco() 
     if conn is None:
-        return  # Se a conexão falhar, sai da função
+        return 
 
-    cursor = conn.cursor()  # Cria um cursor para executar comandos SQL
+    cursor = conn.cursor() 
 
     try:
-        # Converte data (string para objeto datetime.date, se necessário)
         data_str = data.get('data')
         data_date = datetime.strptime(data_str, '%Y-%m-%d').date() if isinstance(data_str, str) else data_str
 
-        # Insere os dados principais na tabela 'registros'
+        # ADICIONADO: 'tipo_visita' na instrução INSERT
         cursor.execute("""
             INSERT INTO registros (
                 colaborador, orgao_publico, figura_publica, cargo,
-                assunto, municipio, data, foto
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                assunto, municipio, data, foto, tipo_visita
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             data.get('colaborador'), data.get('orgao_publico'),
             data.get('figura_publica'), data.get('cargo'),
             data.get('assunto'), data.get('municipio'),
-            data_date,  # Aqui já convertido
-            data.get('foto')
+            data_date, 
+            data.get('foto'),
+            data.get('tipo_visita') # ADICIONADO: Campo tipo_visita
         ))
 
-        # Se houver demandas, insira-as na tabela 'demandas'
         demandas = data.get('demandas')
         if demandas:
             for demanda in demandas:
@@ -235,13 +218,14 @@ def salvar_no_banco(data: dict):
                     demanda.get('pro'), demanda.get('observacao')
                 ))
 
-        conn.commit()  # Salva as alterações no banco
-        print("Dados salvos no PostgreSQL!")
+        conn.commit() 
+        logger.info("Dados salvos no PostgreSQL!") # Alterado para logger.info
 
     except psycopg2.Error as e:
-        conn.rollback()  # Em caso de erro, desfaz as alterações
-        print(f"Erro ao salvar no banco de dados: {e}")
+        conn.rollback() 
+        logger.error(f"Erro ao salvar no banco de dados: {e}") # Alterado para logger.error
 
     finally:
-        cursor.close()  # Fecha o cursor
-        conn.close()  # Fecha a conexão
+        cursor.close() 
+        conn.close() 
+
