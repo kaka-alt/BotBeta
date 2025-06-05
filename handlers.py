@@ -75,7 +75,7 @@ async def colaborador_manual(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def solicitar_tipo_visita(update: Update, context: ContextTypes.DEFAULT_TYPE):
     buttons = [
         InlineKeyboardButton("🔄 Reativa", callback_data="tipo_visita_reativa"),
-        InlineKeyboardButton(" proactive Proativa", callback_data="tipo_visita_proativa"),
+        InlineKeyboardButton("🎯 Proativa", callback_data="tipo_visita_proativa"),
     ]
     keyboard = InlineKeyboardMarkup.from_row(buttons)
 
@@ -96,7 +96,7 @@ async def tipo_visita_escolha(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data['tipo_visita'] = tipo_visita.capitalize() # Salva o tipo (capitalizado).
 
     await query.message.edit_text(f"✅ Tipo de visita selecionado: <b>{tipo_visita.capitalize()}</b>.", parse_mode=ParseMode.HTML)
-    await query.message.reply_text("🏠 Perfeito! Agora, digite uma <b>palavra-chave</b> para buscar o <b>órgão público</b> (ex: 'prefeitura' ou 'saúde'):", parse_mode=ParseMode.HTML)
+    await query.message.reply_text("🏠 Perfeito! Agora, digite uma <b>palavra-chave</b> para buscar o <b>órgão público</b> (ex: 'Vitória' ou 'Prefeitura'):", parse_mode=ParseMode.HTML)
     return ORGAO_PUBLICO_KEYWORD # Continua o fluxo para o próximo passo.
 
 # --- FIM NOVO: Etapa: Tipo de Visita ---
@@ -193,7 +193,7 @@ async def cargo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cargo = update.message.text.strip()
     context.user_data['cargo'] = cargo
     await update.message.reply_text(f"✅ Cargo registrado: <b>{cargo}</b>.", parse_mode=ParseMode.HTML)
-    await update.message.reply_text("✉️ Por favor, digite uma <b>palavra-chave</b> para buscar o <b>assunto</b> da ocorrência:", parse_mode=ParseMode.HTML)
+    await update.message.reply_text("✉️ Por favor, digite uma <b>palavra-chave</b> para buscar o <b>assunto</b> da ocorrência (ex: 'Desligamento de BT' ou 'Manutenção de Poste'):", parse_mode=ParseMode.HTML)
     return ASSUNTO_PALAVRA_CHAVE 
 
 
