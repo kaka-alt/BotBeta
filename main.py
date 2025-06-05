@@ -7,13 +7,8 @@ from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
     CallbackQueryHandler, ConversationHandler, filters
 )
-
-# --- IMPORTAÇÕES ESSENCIAIS PARA O SEU FLUXO (AGORA DESCOMENTADAS) ---
-# Certifique-se de que o arquivo 'handlers.py' existe e está correto.
 from handlers import *
 import handlers
-
-# Certifique-se de que o arquivo 'exportar_para_excel.py' existe e que a função 'export_data_to_drive' está nele.
 from exportar_para_excel import export_data_to_drive 
 # --- FIM DAS IMPORTAÇÕES ESSENCIAIS ---
 
@@ -139,8 +134,7 @@ async def startup_event():
     application.add_handler(CommandHandler('salvar_onedrive', salvar_onedrive_telegram))
     application.add_handler(CommandHandler('setwebhook', set_webhook_command))
 
-    # --- HANDLERS DE CONVERSAÇÃO (AGORA DESCOMENTADOS) ---
-    # Certifique-se de que 'handlers' está importado e que 'handlers.iniciar_colaborador' existe.
+    # --- HANDLERS DE CONVERSAÇÃO
     if 'handlers' in globals() and hasattr(handlers, 'iniciar_colaborador'):
         conv_handler = ConversationHandler(
             entry_points=[CommandHandler('iniciar', handlers.iniciar_colaborador)],

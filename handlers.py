@@ -3,79 +3,98 @@ from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, Call
 from datetime import datetime
 import os
 import csv
-import logging # Adicionar import de logging
-# Importe sua função de upload de fotos do exportar_para_excel.py
-from exportar_para_excel import export_data_to_drive, upload_photo_to_drive 
-# Importe seus outros módulos auxiliares
-import config
-import utils
-from telegram.constants import ParseMode
-from globals import user_data # Se você usa um arquivo globals.py para user_data
+import logging 
+from telegram.constants import ParseMode # Essencial para usar formatação como negrito e emojis
 
-# Configuração de logging para handlers.py
+# Importa as funções que interagem com o Google Drive, como upload de fotos e exportação de dados Excel.
+from exportar_para_excel import export_data_to_drive, upload_photo_to_drive 
+
+# Importa módulos de suporte para configurações (config), utilidades (utils) e dados globais (globals).
+import config 
+import utils  
+from globals import user_data 
+
+# Configura o logger para este arquivo, útil para acompanhar o que está acontecendo no Render.
 logger = logging.getLogger(__name__)
 
-# --- Definição dos Estados (CRÍTICO: Certifique-se de que estes estados estão definidos) ---
-# Exemplo de como os estados podem ser definidos em handlers.py
-# O número deve ser ajustado conforme a quantidade real de estados que você tem.
+# --- Definição dos Estados da Nossa Conversa ---
+# Cada um desses nomes representa um "passo" no fluxo do bot. 
+# O 'range()' nos ajuda a dar um número único para cada estado, que é usado pelo ConversationHandler.
 COLABORADOR, COLABORADOR_MANUAL, ORGAO_PUBLICO_KEYWORD, ORGAO_PUBLICO_PAGINACAO, ORGAO_PUBLICO_MANUAL, \
 FIGURA_PUBLICA, CARGO, ASSUNTO_PALAVRA_CHAVE, ASSUNTO_PAGINACAO, ASSUNTO_MANUAL, \
 MUNICIPIO, DATA, DATA_MANUAL, FOTO, DEMANDA_ESCOLHA, DEMANDA_DIGITAR, OV, PRO, \
 OBSERVACAO_ESCOLHA, OBSERVACAO_DIGITAR, CONFIRMACAO_FINAL = range(21) 
-# Se você tiver mais estados, ajuste o número do range.
 
 
-# --- Início: Colaborador ---
+# --- Início do Nosso Registro: Seleção do Colaborador ---
 async def iniciar_colaborador(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Crio botões dinamicamente com a lista de colaboradores que você definiu em 'config.py'.
     buttons = [InlineKeyboardButton(name, callback_data=f"colaborador_{name}") for name in config.COLABORADORES]
+    # Adiciono a opção para digitar manualmente, caso o nome não esteja na lista.
     buttons.append(InlineKeyboardButton("Outro", callback_data="colaborador_outro"))
+    # Organizo os botões em um menu de 2 colunas para ficar visualmente melhor.
     keyboard = InlineKeyboardMarkup(utils.build_menu(buttons, n_cols=2))
-    await update.message.reply_text("👨‍💼 Selecione o colaborador ou clique em Outro para digitar manualmente:", reply_markup=keyboard)
-    return 'COLABORADOR' # Retorna o estado COLABORADOR
+    # Envio a primeira mensagem, pedindo para o usuário escolher o colaborador.
+    await update.message.reply_text(
+        "👋 Olá! Vamos começar o registro da ocorrência.\nPor favor, selecione o <b>colaborador</b> na lista ou clique em 'Outro' para digitar manualmente:", 
+        reply_markup=keyboard, 
+        parse_mode=ParseMode.HTML # Permite usar o negrito (<b>) na mensagem.
+    )
+    # Sinalizo ao bot que agora estamos no estado de "COLABORADOR", esperando a escolha.
+    return 'COLABORADOR'
 
-# Cria botoes para a paginação de colaboradores
+# Lida com a escolha do colaborador via botão ou a opção "Outro".
 async def colaborador_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    data = query.data
+    query = update.callback_query # Pego a informação do botão que foi clicado.
+    await query.answer() # Importante: indica ao Telegram que a interação foi recebida.
+    data = query.data # O texto que estava no 'callback_data' do botão.
 
     if data == "colaborador_outro":
-        await query.message.reply_text("👨‍💼 Digite o nome do colaborador:")
-        return 'COLABORADOR_MANUAL' # Retorna o estado COLABORADOR_MANUAL
+        # Se o usuário optou por digitar o nome.
+        await query.message.reply_text("✍️ Entendido! Por favor, digite o <b>nome completo do colaborador</b>:")
+        return 'COLABORADOR_MANUAL' # Passamos para o estado onde esperamos o texto digitado.
     else:
-        colaborador = data.replace("colaborador_", "")
-        context.user_data['colaborador'] = colaborador
-        await query.message.reply_text(f"Colaborador selecionado: {colaborador}")
-        await query.message.reply_text("🏠 Agora, digite uma palavra-chave para buscar o órgão público:")
-        return 'ORGAO_PUBLICO_KEYWORD' # Retorna o estado ORGAO_PUBLICO_KEYWORD
+        # Se o usuário escolheu um colaborador da lista.
+        colaborador = data.replace("colaborador_", "") # Removo o prefixo para ter só o nome.
+        context.user_data['colaborador'] = colaborador # Salvo o nome no contexto da conversa.
+        await query.message.edit_text(f"✅ Colaborador selecionado: <b>{colaborador}</b>.", parse_mode=ParseMode.HTML) # Edito a mensagem anterior para confirmar.
+        await query.message.reply_text("🏠 Perfeito! Agora, digite uma <b>palavra-chave</b> para buscar o <b>órgão público</b> (ex: 'prefeitura' ou 'saúde'):", parse_mode=ParseMode.HTML)
+        return 'ORGAO_PUBLICO_KEYWORD' # Seguimos para a busca do órgão.
 
-#função chamada quando o usuário digita manualmente o colaborador
+# Lida com a entrada manual do nome do colaborador.
 async def colaborador_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    nome = update.message.text.strip()
-    context.user_data['colaborador'] = nome
-    await update.message.reply_text(f"Nome do colaborador registrado: {nome}")
-    await update.message.reply_text("🏠 Agora, digite uma palavra-chave para buscar o órgão público:")
-    return 'ORGAO_PUBLICO_KEYWORD' # Retorna o estado ORGAO_PUBLICO_KEYWORD
+    nome = update.message.text.strip() # Pego o texto digitado.
+    context.user_data['colaborador'] = nome # Salvo o nome.
+    await update.message.reply_text(f"✅ Colaborador registrado: <b>{nome}</b>.", parse_mode=ParseMode.HTML)
+    await update.message.reply_text("🏠 Perfeito! Agora, digite uma <b>palavra-chave</b> para buscar o <b>órgão público</b> (ex: 'prefeitura' ou 'saúde'):", parse_mode=ParseMode.HTML)
+    return 'ORGAO_PUBLICO_KEYWORD' # Seguimos para a busca do órgão.
 
 
-# --- Órgão público ---
+# --- Etapa: Órgão Público ---
+# Inicia a busca por órgão público com uma palavra-chave.
 async def buscar_orgao(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyword = update.message.text.lower()
-    orgaos = utils.ler_orgaos_csv()
-    resultados = [o for o in orgaos if keyword in o.lower()]
-    context.user_data['orgaos_busca'] = resultados
-    context.user_data['orgao_pagina'] = 0
+    keyword = update.message.text.lower() # Pego a palavra-chave e padronizo para minúsculas.
+    orgaos = utils.ler_orgaos_csv() # Leio a lista de órgãos do seu CSV através de 'utils.py'.
+    resultados = [o for o in orgaos if keyword in o.lower()] # Filtro os resultados.
+    context.user_data['orgaos_busca'] = resultados # Guardo os resultados para a paginação.
+    context.user_data['orgao_pagina'] = 0 # Começo na primeira página.
 
     if not resultados:
-        await update.message.reply_text("❗ Nenhum órgão encontrado. Digite manualmente o nome do órgão público:")
-        return 'ORGAO_PUBLICO_MANUAL' # Retorna o estado ORGAO_PUBLICO_MANUAL
+        # Se não encontramos nada.
+        await update.message.reply_text("❗ Não encontramos nenhum órgão com essa palavra-chave. Por favor, digite <b>manualmente o nome completo do órgão público</b>:", parse_mode=ParseMode.HTML)
+        return 'ORGAO_PUBLICO_MANUAL' # Pedimos para o usuário digitar.
 
+    # Se encontramos resultados, mostramos os botões de paginação.
     buttons, pagina_atual = utils.botoes_pagina(resultados, 0, prefix="orgao_")
     keyboard = InlineKeyboardMarkup(buttons)
-    await update.message.reply_text(f"Resultados encontrados : {len(resultados)}", reply_markup=keyboard)
-    return 'ORGAO_PUBLICO_PAGINACAO' # Retorna o estado ORGAO_PUBLICO_PAGINACAO
+    await update.message.reply_text(
+        f"🔎 Encontrei <b>{len(resultados)} resultados</b> para '<i>{keyword}</i>'. Selecione abaixo ou navegue nas opções:", 
+        reply_markup=keyboard, 
+        parse_mode=ParseMode.HTML
+    )
+    return 'ORGAO_PUBLICO_PAGINACAO' # Passamos para o estado de paginação.
 
-#Função que controla as paginas de órgãos públicos
+# Lida com a navegação na lista de órgãos públicos e a seleção.
 async def orgao_paginacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -85,80 +104,87 @@ async def orgao_paginacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     resultados = context.user_data.get("orgaos_busca", [])
 
     if data == "orgao_proximo":
+        # Avança para a próxima página de resultados.
         pagina_atual += 1
         context.user_data["orgao_pagina"] = pagina_atual
         botoes, _ = utils.botoes_pagina(resultados, pagina_atual, prefix="orgao_")
-        await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(botoes))
-        return 'ORGAO_PUBLICO_PAGINACAO' # Retorna o estado ORGAO_PUBLICO_PAGINACAO
+        await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(botoes)) # Atualizo os botões na mesma mensagem.
+        return 'ORGAO_PUBLICO_PAGINACAO' # Continuamos na paginação.
 
     elif data == "orgao_voltar":
-        pagina_atual = max(0, pagina_atual - 1)
+        # Volta para a página anterior.
+        pagina_atual = max(0, pagina_atual - 1) # Evita páginas negativas.
         context.user_data["orgao_pagina"] = pagina_atual
         botoes, _ = utils.botoes_pagina(resultados, pagina_atual, prefix="orgao_")
         await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(botoes))
-        return 'ORGAO_PUBLICO_PAGINACAO' # Retorna o estado ORGAO_PUBLICO_PAGINACAO
+        return 'ORGAO_PUBLICO_PAGINACAO'
 
     elif data == "orgao_inserir_manual":
-        await query.message.reply_text("✍️ Digite manualmente o nome do órgão público:")
-        return 'ORGAO_PUBLICO_MANUAL' # Retorna o estado ORGAO_PUBLICO_MANUAL
+        # Opção para digitar manualmente.
+        await query.message.reply_text("✍️ Certo. Por favor, digite <b>manualmente o nome completo do órgão público</b>:", parse_mode=ParseMode.HTML)
+        return 'ORGAO_PUBLICO_MANUAL' # Passamos para o estado de digitação manual.
 
     elif data == "orgao_refazer_busca":
-        await query.message.reply_text("🔎 Digite uma nova palavra-chave para buscar o órgão:")
-        return 'ORGAO_PUBLICO_KEYWORD' # Retorna o estado ORGAO_PUBLICO_KEYWORD
-
+        # Opção para uma nova busca.
+        await query.message.reply_text("🔄 Ok, vamos refazer a busca. Digite uma nova <b>palavra-chave</b> para o órgão público:", parse_mode=ParseMode.HTML)
+        return 'ORGAO_PUBLICO_KEYWORD' # Voltamos para a busca por palavra-chave.
+    
     else:
+        # Quando um órgão é selecionado da lista.
         orgao_selecionado = data.replace("orgao_", "")
-        context.user_data["orgao_publico"] = orgao_selecionado
-        await query.message.reply_text(f"🏢 Órgão selecionado: {orgao_selecionado}")
-        await query.message.reply_text("🧥 Digite o nome da figura pública:")
-        return 'FIGURA_PUBLICA' # Retorna o estado FIGURA_PUBLICA
-
-# Função chamada quando o usuário digita manualmente o órgão público
+        context.user_data["orgao_publico"] = orgao_selecionado # Salvo o órgão.
+        await query.message.edit_text(f"✅ Órgão selecionado: <b>{orgao_selecionado}</b>.", parse_mode=ParseMode.HTML)
+        await query.message.reply_text("🧑‍💼 Excelente! Agora, digite o <b>nome completo da figura pública</b> (a pessoa de contato) relacionada a este órgão:", parse_mode=ParseMode.HTML)
+        return 'FIGURA_PUBLICA' # Seguimos para a figura pública.
+    
+# Lida com a entrada manual do nome do órgão público.
 async def orgao_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nome = update.message.text.strip()
     context.user_data['orgao_publico'] = nome
-    utils.salvar_orgao(nome)  
-    await update.message.reply_text(f"✔️ Órgão público registrado manualmente: {nome}")
-    await update.message.reply_text("🧥 Digite o nome da figura pública:")
-    return 'FIGURA_PUBLICA' # Retorna o estado FIGURA_PUBLICA
+    utils.salvar_orgao(nome)  # Salvo o novo órgão no seu CSV de órgãos (via 'utils.py').
+    await update.message.reply_text(f"✅ Órgão público registrado manualmente: <b>{nome}</b>.", parse_mode=ParseMode.HTML)
+    await update.message.reply_text("🧑‍💼 Excelente! Agora, digite o <b>nome completo da figura pública</b> (a pessoa de contato) relacionada a este órgão:", parse_mode=ParseMode.HTML)
+    return 'FIGURA_PUBLICA' 
 
 
-# --- Figura pública ---
+# --- Etapa: Figura Pública ---
 async def figura_publica_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     figura_publica = update.message.text.strip()
     context.user_data['figura_publica'] = figura_publica
-    await update.message.reply_text(f"✔️ Figura pública registrada: {figura_publica}.")
-    await update.message.reply_text("🧥 Digite o Cargo:")
-    return 'CARGO' # Retorna o estado CARGO
+    await update.message.reply_text(f"✅ Figura pública registrada: <b>{figura_publica}</b>.", parse_mode=ParseMode.HTML)
+    await update.message.reply_text("💼 E qual é o <b>Cargo</b> dessa figura pública?", parse_mode=ParseMode.HTML)
+    return 'CARGO' 
 
 
-# --- Cargo ---
+# --- Etapa: Cargo ---
 async def cargo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cargo = update.message.text.strip()
     context.user_data['cargo'] = cargo
-    await update.message.reply_text(f"✔️ Cargo registrado: {cargo}")
-    await update.message.reply_text("✉️ Digite o Assunto:")
-    return 'ASSUNTO_PALAVRA_CHAVE' # Retorna o estado ASSUNTO_PALAVRA_CHAVE
+    await update.message.reply_text(f"✅ Cargo registrado: <b>{cargo}</b>.", parse_mode=ParseMode.HTML)
+    await update.message.reply_text("✉️ Por favor, digite uma <b>palavra-chave</b> para buscar o <b>assunto</b> da ocorrência:", parse_mode=ParseMode.HTML)
+    return 'ASSUNTO_PALAVRA_CHAVE' 
 
 
-# --- Assunto ---
+# --- Etapa: Assunto ---
+# Inicia a busca por assunto com uma palavra-chave.
 async def buscar_assunto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     palavra_chave = update.message.text.lower()
-    assuntos = utils.ler_assuntos_csv()
+    assuntos = utils.ler_assuntos_csv() # Leio a lista de assuntos do seu CSV.
     resultados = [a for a in assuntos if palavra_chave in a.lower()]
     context.user_data['assuntos_busca'] = resultados
     context.user_data['assunto_pagina'] = 0
 
     if not resultados:
-        await update.message.reply_text("❗ Nenhum assunto encontrado. Digite manualmente o assunto:")
-        return 'ASSUNTO_MANUAL' # Retorna o estado ASSUNTO_MANUAL
-
+        # Se nenhum assunto for encontrado.
+        await update.message.reply_text("❗ Nenhum assunto encontrado com essa palavra-chave. Por favor, digite <b>manualmente o assunto completo</b>:", parse_mode=ParseMode.HTML)
+        return 'ASSUNTO_MANUAL'
+    
     buttons, pagina_atual = utils.botoes_pagina(resultados, 0, prefix="assunto_")
     keyboard = InlineKeyboardMarkup(buttons)
-    await update.message.reply_text(f"Resultados encontrados (página {pagina_atual + 1}):", reply_markup=keyboard)
-    return 'ASSUNTO_PAGINACAO' # Retorna o estado ASSUNTO_PAGINACAO
+    await update.message.reply_text(f"🔎 Encontrei <b>{len(resultados)} resultados</b> para '<i>{palavra_chave}</i>'. Selecione abaixo ou navegue nas opções:", reply_markup=keyboard, parse_mode=ParseMode.HTML)
+    return 'ASSUNTO_PAGINACAO'
 
-# Função que controla as páginas de assuntos
+# Lida com a navegação na lista de assuntos e a seleção.
 async def assunto_paginacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -172,46 +198,49 @@ async def assunto_paginacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["assunto_pagina"] = pagina_atual
         botoes, _ = utils.botoes_pagina(resultados, pagina_atual, prefix="assunto_")
         await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(botoes))
-        return 'ASSUNTO_PAGINACAO' # Retorna o estado ASSUNTO_PAGINACAO
+        return 'ASSUNTO_PAGINACAO'
 
     elif data == "assunto_voltar":
         pagina_atual = max(0, pagina_atual - 1)
         context.user_data["assunto_pagina"] = pagina_atual
         botoes, _ = utils.botoes_pagina(resultados, pagina_atual, prefix="assunto_")
         await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(botoes))
-        return 'ASSUNTO_PAGINACAO' # Retorna o estado ASSUNTO_PAGINACAO
+        return 'ASSUNTO_PAGINACAO'
 
     elif data == "assunto_inserir_manual":
-        await query.message.reply_text("✍️ Digite manualmente o nome do assunto:")
-        return 'ASSUNTO_MANUAL'  # Retorna o estado ASSUNTO_MANUAL
+        await query.message.reply_text("✍️ Certo. Por favor, digite <b>manualmente o assunto completo</b>:", parse_mode=ParseMode.HTML)
+        return 'ASSUNTO_MANUAL'
 
     elif data == "assunto_refazer_busca":
-        await query.message.reply_text("🔎 Digite uma nova palavra-chave para buscar o assunto:")
-        return 'ASSUNTO_PALAVRA_CHAVE' # Retorna o estado ASSUNTO_PALAVRA_CHAVE
+        await query.message.reply_text("🔄 Ok, vamos refazer a busca. Digite uma nova <b>palavra-chave</b> para o assunto:", parse_mode=ParseMode.HTML)
+        return 'ASSUNTO_PALAVRA_CHAVE'
 
     else:
         assunto_selecionado = data.replace("assunto_", "")
         context.user_data["assunto"] = assunto_selecionado
-        await query.message.reply_text(f"📌 Assunto selecionado: {assunto_selecionado}")
-        await query.message.reply_text("🏙️ Digite o município:")
-        return 'MUNICIPIO' # Retorna o estado MUNICIPIO
+        await query.message.edit_text(f"✅ Assunto selecionado: <b>{assunto_selecionado}</b>.", parse_mode=ParseMode.HTML)
+        await query.message.reply_text("🏙️ Quase lá! Em qual <b>município</b> a ocorrência aconteceu?", parse_mode=ParseMode.HTML)
+        return 'MUNICIPIO'
 
+# Lida com o assunto digitado manualmente.
 async def assunto_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
     assunto = update.message.text.strip()
     context.user_data['assunto'] = assunto
     utils.salvar_assunto(assunto) 
-    await update.message.reply_text(f"✔️ Assunto registrado: {assunto}")
-    await update.message.reply_text("🏙️ Digite o município:")
-    return 'MUNICIPIO' # Retorna o estado MUNICIPIO
+    await update.message.reply_text(f"✅ Assunto registrado: <b>{assunto}</b>.", parse_mode=ParseMode.HTML)
+    await update.message.reply_text("🏙️ Quase lá! Em qual <b>município</b> a ocorrência aconteceu?", parse_mode=ParseMode.HTML)
+    return 'MUNICIPIO'
 
 
-# --- Município ---
+# --- Etapa: Município ---
 async def municipio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['municipio'] = update.message.text.strip()
-    return await solicitar_data(update, context)
+    await update.message.reply_text(f"✅ Município registrado: <b>{context.user_data['municipio']}</b>.", parse_mode=ParseMode.HTML)
+    return await solicitar_data(update, context) # Chama a função que pede a data.
 
 
-# --- Data ---
+# --- Etapa: Data da Ocorrência ---
+# Pergunta ao usuário como ele quer informar a data (atual ou manual).
 async def solicitar_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     buttons = [
         InlineKeyboardButton("📅 Usar data/hora atual", callback_data="data_hoje"),
@@ -219,216 +248,214 @@ async def solicitar_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     keyboard = InlineKeyboardMarkup.from_row(buttons)
 
-    if update.message:
-        await update.message.reply_text("Selecione uma opção para a data:", reply_markup=keyboard)
-    elif update.callback_query:
-        await update.callback_query.message.reply_text("Selecione uma opção para a data:", reply_markup=keyboard)
+    # Verifica se a chamada veio de uma mensagem ou de um botão para responder corretamente.
+    if update.message: 
+        await update.message.reply_text("🗓️ Por favor, selecione uma opção para a <b>data da ocorrência</b>:", reply_markup=keyboard, parse_mode=ParseMode.HTML)
+    elif update.callback_query: 
+        await update.callback_query.message.reply_text("🗓️ Por favor, selecione uma opção para a <b>data da ocorrência</b>:", reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
-    return 'DATA' # Retorna o estado DATA
+    return 'DATA' 
 
+# Lida com a entrada da data (escolha de botão ou digitação manual).
 async def data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.callback_query:
+    if update.callback_query: # Se a entrada veio de um clique de botão.
         query = update.callback_query
         await query.answer()
 
         if query.data == "data_hoje":
             dt = datetime.now()
-            context.user_data['data'] = dt.strftime("%Y-%m-%d")
-            await query.message.edit_text(f"✔️ Data registrada: {dt.strftime('%Y/%m/%d')}")
-            await query.message.reply_text("📷 Por favor, envie a foto:")
-            return 'FOTO' # Retorna o estado FOTO
+            context.user_data['data'] = dt.strftime("%Y-%m-%d") # Salva a data formatada.
+            await query.message.edit_text(f"✅ Data registrada: <b>{dt.strftime('%Y/%m/%d %H:%M')}</b>.", parse_mode=ParseMode.HTML) # Confirma com data e hora.
+            await query.message.reply_text("📷 Perfeito! Agora, por favor, envie a <b>foto</b> da ocorrência:", parse_mode=ParseMode.HTML)
+            return 'FOTO' 
 
         elif query.data == "data_manual":
-            await query.message.edit_text("Digite a data no formato AAAA/MM/DD:")
-            return 'DATA_MANUAL' # Retorna o estado DATA_MANUAL
+            await query.message.edit_text("✍️ Entendido. Por favor, digite a data no formato <b>AAAA/MM/DD</b> (ex: 2025/06/04):", parse_mode=ParseMode.HTML)
+            return 'DATA_MANUAL'
 
-    else: # Se a entrada for um texto (data manual)
+    else: # Se a entrada veio de uma mensagem de texto (digitação manual).
         texto = update.message.text.strip()
         try:
+            # Tenta converter o texto para o formato de data.
             dt = datetime.strptime(texto, "%Y/%m/%d")
             context.user_data['data'] = dt.strftime("%Y-%m-%d")
-            await update.message.reply_text("✔️ Data registrada com sucesso.")
-            await update.message.reply_text("📷 Por favor, envie a foto:")
-            return FOTO # Retorna o estado FOTO
+            await update.message.reply_text(f"✅ Data registrada: <b>{dt.strftime('%Y/%m/%d')}</b>.", parse_mode=ParseMode.HTML)
+            await update.message.reply_text("📷 Perfeito! Agora, por favor, envie a <b>foto</b> da ocorrência:", parse_mode=ParseMode.HTML)
+            return 'FOTO' 
         except ValueError:
-            await update.message.reply_text("❗ Formato inválido. Digite a data no formato AAAA/MM/DD:") # Corrigido para AAAA/MM/DD
-            return 'DATA_MANUAL' # Retorna o estado DATA_MANUAL
+            # Se o formato estiver incorreto.
+            await update.message.reply_text("❗ Formato inválido. Por favor, digite a data no formato <b>AAAA/MM/DD</b> (ex: 2025/06/04):", parse_mode=ParseMode.HTML)
+            return 'DATA_MANUAL' 
 
 
-# --- Foto ---
+# --- Etapa: Foto da Ocorrência ---
 async def foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.photo:
-        await update.message.reply_text("❗ Por favor, envie uma foto válida.")
-        return 'FOTO' # Retorna o estado FOTO
+        # Se o que foi enviado não é uma foto.
+        await update.message.reply_text("❗ Isso não parece uma foto. Por favor, envie uma <b>foto válida</b> da ocorrência.", parse_mode=ParseMode.HTML)
+        return 'FOTO' # Pedimos novamente a foto.
 
-    photo = update.message.photo[-1] # Pega a maior resolução da foto
-    
-    # Obtém o objeto File do Telegram
-    telegram_file = await context.bot.get_file(photo.file_id)
+    photo = update.message.photo[-1] # Pego a foto de maior resolução.
+    telegram_file = await context.bot.get_file(photo.file_id) # Obtenho o objeto de arquivo do Telegram.
+    photo_bytes = await telegram_file.download_as_bytearray() # Baixo a foto para a memória.
 
-    # Baixa o conteúdo da foto em bytes
-    # Usaremos download_as_bytearray() para obter os bytes diretamente na memória
-    photo_bytes = await telegram_file.download_as_bytearray()
-
-    # Gera um nome de arquivo único para a foto no Drive
+    # Gero um nome de arquivo único para o Google Drive, usando o ID do usuário e um timestamp.
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    # Para o nome da foto, podemos usar o ID do usuário + timestamp para garantir unicidade
     user_id = update.effective_user.id
-    filename = f"foto_{user_id}_{timestamp}.jpg" # Assumindo JPG, Telegram converte para JPG/PNG
+    filename = f"foto_{user_id}_{timestamp}.jpg" 
 
-    # --- NOVO: Faz o upload da foto para o Google Drive ---
     logger.info(f"Tentando fazer upload da foto {filename} para o Google Drive.")
-    drive_file_id = await upload_photo_to_drive(bytes(photo_bytes), filename) # Converte bytearray para bytes
+    # Dou um feedback imediato para o usuário, avisando que o upload está em andamento.
+    await update.message.reply_text("⏳ Enviando a foto para o Google Drive... Por favor, aguarde, isso pode levar alguns segundos.", parse_mode=ParseMode.HTML) 
+    # Chamo a função de upload para o Google Drive.
+    drive_file_id = await upload_photo_to_drive(bytes(photo_bytes), filename) 
     
     if drive_file_id:
-        context.user_data["foto"] = drive_file_id # Salva o ID do arquivo no Drive
+        # Se o upload foi um sucesso.
+        context.user_data["foto"] = drive_file_id # Salvo o ID do arquivo no Google Drive.
         logger.info(f"Foto salva no Google Drive. ID: {drive_file_id}")
-        await update.message.reply_text("✔️ Foto recebida e enviada para o Google Drive.")
+        await update.message.reply_text("✅ Foto recebida e enviada para o Google Drive com sucesso!")
     else:
-        context.user_data["foto"] = "Erro no upload" # Indica falha no upload
+        # Se houve um erro no upload.
+        context.user_data["foto"] = "Erro no upload" # Indico a falha.
         logger.error("Falha ao enviar foto para o Google Drive.")
-        await update.message.reply_text("❗ Ocorreu um erro ao enviar a foto para o Google Drive. Por favor, tente novamente.")
-        return 'FOTO' # Permanece no estado FOTO para nova tentativa
+        await update.message.reply_text("❌ Ocorreu um erro ao enviar a foto para o Google Drive. Por favor, tente novamente.", parse_mode=ParseMode.HTML)
+        return 'FOTO' # Permaneço no estado de foto para o usuário tentar de novo.
 
-    context.user_data["demandas"] = [] # Inicializa a lista de demandas
+    context.user_data["demandas"] = [] # Inicializo a lista de demandas para esta ocorrência.
 
-    # Botões para próxima etapa
+    # Botões para perguntar se o usuário quer adicionar demandas.
     buttons = [
         [InlineKeyboardButton("➕ Adicionar demanda", callback_data="add_demanda")],
-        [InlineKeyboardButton("❌ Não adicionar demanda", callback_data="fim_demandas")],
+        [InlineKeyboardButton("⏭️ Pular demandas", callback_data="fim_demandas")], 
     ]
     reply_markup = InlineKeyboardMarkup(buttons)
 
-    await update.message.reply_text("Quer adicionar uma demanda?", reply_markup=reply_markup)
-    return 'DEMANDA_ESCOLHA' # Retorna o estado DEMANDA_ESCOLHA
+    await update.message.reply_text("📝 Quer adicionar uma <b>demanda</b> relacionada a esta ocorrência?", reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    return 'DEMANDA_ESCOLHA' 
 
-# --- Demanda ---
+# --- Etapa: Demanda ---
+# Lida com a escolha de adicionar demandas ou finalizar.
 async def demanda(update, context):
     query = update.callback_query
     await query.answer()
-    
     data = query.data
 
     if data == "add_demanda":
-        await query.edit_message_text("Por favor, digite a demanda:")
-        return 'DEMANDA_DIGITAR' # Retorna o estado DEMANDA_DIGITAR
+        # Se o usuário quer adicionar uma demanda.
+        await query.edit_message_text("✍️ Certo. Por favor, digite o <b>texto completo da demanda</b>:", parse_mode=ParseMode.HTML)
+        return 'DEMANDA_DIGITAR' 
 
     elif data == "fim_demandas":
-        await query.edit_message_text("Finalizando demandas. Vamos para o resumo...")
-        return await resumo(update, context) # Chama resumo e retorna seu estado
+        # Se o usuário quer finalizar as demandas.
+        await query.edit_message_text("✅ Ok, finalizando as demandas. Vamos para o <b>resumo</b> da ocorrência.", parse_mode=ParseMode.HTML)
+        return await resumo(update, context) # Chamo a função de resumo.
 
-    elif data == "pular_demanda": # Este callback_data não estava sendo usado antes, mas se for, aqui está a lógica
+    elif data == "pular_demanda": # Este é um callback_data alternativo.
         await query.edit_message_text("Você optou por pular as demandas.")
-        return await resumo(update, context) # Chama resumo e retorna seu estado
+        return await resumo(update, context)
 
 
-# Receber texto da demanda
+# Recebe o texto principal da demanda.
 async def demanda_digitar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["nova_demanda"]= {
         "texto": update.message.text
     }
-    await update.message.reply_text("Informe o número do OV:")
-    return 'OV'  # Retorna o estado OV
+    await update.message.reply_text("🔢 Agora, informe o <b>número do OV</b> (Orçamento de Venda) relacionado a esta demanda (se não tiver, digite 'N/A'):", parse_mode=ParseMode.HTML)
+    return 'OV '
 
-# Receber OV
+# Recebe o número do OV.
 async def ov(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["nova_demanda"]["ov"] = update.message.text
-    await update.message.reply_text("Informe o número do PRO:")
-    return 'PRO'  # Retorna o estado PRO
+    await update.message.reply_text("🔢 E qual o <b>número do PRO</b> (Projeto) relacionado (se não tiver, digite 'N/A')?", parse_mode=ParseMode.HTML)
+    return 'PRO' 
 
-# Receber PRO
+# Recebe o número do PRO.
 async def pro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["nova_demanda"]["pro"] = update.message.text
 
+    # Botões para decidir sobre adicionar observação.
     keyboard = [
-        [InlineKeyboardButton("Adicionar observação", callback_data="add_obs")],
-        [InlineKeyboardButton("Pular", callback_data="skip_obs")]
+        [InlineKeyboardButton("➕ Adicionar observação", callback_data="add_obs")],
+        [InlineKeyboardButton("⏭️ Pular observação", callback_data="skip_obs")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Deseja adicionar uma observação?", reply_markup=reply_markup)
-    return 'OBSERVACAO_ESCOLHA'  # Retorna o estado OBSERVACAO_ESCOLHA
+    await update.message.reply_text("💬 Deseja adicionar uma <b>observação</b> específica para esta demanda?", reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    return 'OBSERVACAO_ESCOLHA' 
 
-# Escolha de observação
+# Lida com a escolha de adicionar ou pular observação.
 async def observacao_escolha(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
     if query.data == "add_obs":
-        await query.message.reply_text("Digite a observação:")
-        return 'OBSERVACAO_DIGITAR'  # Retorna o estado OBSERVACAO_DIGITAR
+        await query.message.reply_text("✍️ Por favor, digite a <b>observação</b> para esta demanda:", parse_mode=ParseMode.HTML)
+        return 'OBSERVACAO_DIGITAR' 
     else:
-        context.user_data["nova_demanda"]["observacao"] = ""
-        return await salvar_demanda(update, context)
+        context.user_data["nova_demanda"]["observacao"] = "" # Se pulou, a observação fica vazia.
+        return await salvar_demanda(update, context) # Salva a demanda.
 
-# Digitação da observação
+# Recebe o texto da observação digitada.
 async def observacao_digitar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["nova_demanda"]["observacao"] = update.message.text
-    return await salvar_demanda(update, context)
+    return await salvar_demanda(update, context) # Salva a demanda.
 
-# Salvar a demanda no dicionário principal
+# Salva a demanda atual no dicionário principal de demandas do usuário.
 async def salvar_demanda(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    demanda = context.user_data.pop("nova_demanda", None)
+    demanda = context.user_data.pop("nova_demanda", None) # Pego e removo a demanda temporária.
     if demanda:
-        context.user_data.setdefault("demandas", []).append(demanda)
+        context.user_data.setdefault("demandas", []).append(demanda) # Adiciono à lista de demandas.
 
+    # Botões para adicionar outra demanda ou finalizar.
     buttons = [
         [InlineKeyboardButton("➕ Adicionar outra demanda", callback_data="add_demanda")],
-        [InlineKeyboardButton("✅ Finalizar", callback_data="fim_demandas")],
+        [InlineKeyboardButton("✅ Finalizar demandas", callback_data="fim_demandas")],
     ]
     reply_markup = InlineKeyboardMarkup(buttons)
 
+    # Responde ou edita a mensagem com feedback.
     if update.callback_query:
         await update.callback_query.answer()
         await update.callback_query.message.reply_text(
-            "✅ Demanda adicionada com sucesso! Deseja adicionar outra?",
-            reply_markup=reply_markup
+            "✅ Demanda adicionada com sucesso! Deseja adicionar outra demanda ou <b>finalizar</b>?",
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.HTML
         )
-    else: # Se a chamada vier de um MessageHandler (ex: observacao_digitar)
+    else: 
         await update.message.reply_text(
-            "✅ Demanda adicionada com sucesso! Deseja adicionar outra?",
-            reply_markup=reply_markup
+            "✅ Demanda adicionada com sucesso! Deseja adicionar outra demanda ou <b>finalizar</b>?",
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.HTML
         )
-    return 'DEMANDA_ESCOLHA'  # Retorna o estado DEMANDA_ESCOLHA
+    return 'DEMANDA_ESCOLHA' 
 
 
-# Lidar com escolha de mais demandas
-async def mais_demandas(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    if query.data == "add_demanda":
-        await query.message.reply_text("Digite a próxima demanda:")
-        return 'DEMANDA_DIGITAR'  # Retorna o estado DEMANDA_DIGITAR
-    else:
-        return await resumo(update, context) # Chama resumo e retorna seu estado
-    
-
+# --- Etapa: Resumo da Ocorrência ---
+# Mostra um resumo de todos os dados coletados antes da confirmação final.
 async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Verifica se a chamada veio de um CallbackQuery ou Message (para resposta)
+    # Determino onde o bot deve responder (se é uma query de botão ou uma mensagem normal).
     if update.callback_query:
         query = update.callback_query
         await query.answer()
-        message_to_edit = query.message
-    elif update.message: # Se for chamado de um MessageHandler
-        message_to_edit = update.message
+        message_target = query.message
+    elif update.message: 
+        message_target = update.message
     else:
-        logger.error("Resumo chamado sem update.message ou update.callback_query")
-        return ConversationHandler.END # Ou um estado de erro
+        logger.error("A função 'resumo' foi chamada sem um 'update.message' ou 'update.callback_query' válido.")
+        return ConversationHandler.END 
 
-    dados = context.user_data
+    dados = context.user_data # Pego todos os dados coletados do usuário para o resumo.
 
-    # A foto agora é o ID do Drive, não o caminho local.
-    # Você pode construir um link para visualização se quiser, mas por enquanto, apenas o ID.
+    # Formato a informação da foto (mostro o ID do Drive para referência).
     foto_info = dados.get('foto', 'N/A')
     if foto_info != 'N/A' and foto_info != 'Erro no upload':
-        # Se quiser um link direto para o Google Drive, precisaria de permissões mais abertas
-        # ou um link de compartilhamento específico. Por enquanto, apenas o ID.
         foto_display = f"ID no Drive: <code>{foto_info}</code>"
     else:
         foto_display = foto_info
 
+    # Construo o texto do resumo com emojis e formatação HTML para destacar.
     resumo_texto = (
-        f"<b>Resumo dos dados coletados:</b>\n"
+        f"✨ <b>Resumo da Ocorrência:</b> ✨\n\n"
         f"👤 <b>Colaborador:</b> {dados.get('colaborador', 'N/A')}\n"
         f"🏢 <b>Órgão Público:</b> {dados.get('orgao_publico', 'N/A')}\n"
         f"🧑‍💼 <b>Figura Pública:</b> {dados.get('figura_publica', 'N/A')}\n"
@@ -436,59 +463,69 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📌 <b>Assunto:</b> {dados.get('assunto', 'N/A')}\n"
         f"🌍 <b>Município:</b> {dados.get('municipio', 'N/A')}\n"
         f"📅 <b>Data:</b> {dados.get('data', 'N/A')}\n"
-        f"📷 <b>Foto:</b> {foto_display}\n\n" # Atualizado para mostrar o ID do Drive
-        f"<b>Demandas:</b>\n"
+        f"📷 <b>Foto:</b> {foto_display}\n\n"
+        f"📝 <b>Demandas Registradas:</b>\n"
     )
 
     demandas = dados.get("demandas", [])
     if demandas:
+        # Listo cada demanda com seus detalhes.
         for i, d in enumerate(demandas, 1):
             resumo_texto += (
-                f"{i}. {d.get('texto', '')}\n"
-                f"   OV: {d.get('ov', '')} | PRO: {d.get('pro', '')}\n"
-                f"   Obs: {d.get('observacao', '')}\n"
+                f"<b>{i}. Demanda:</b> {d.get('texto', 'N/A')}\n"
+                f"   • OV: {d.get('ov', 'N/A')} | PRO: {d.get('pro', 'N/A')}\n"
+                f"   • Obs: {d.get('observacao', 'N/A')}\n"
             )
     else:
-        resumo_texto += "Nenhuma demanda registrada.\n"
+        resumo_texto += "<i>Nenhuma demanda adicional registrada.</i>\n" # Mensagem se não houver demandas.
 
+    # Botões para confirmar o salvamento ou cancelar tudo.
     buttons = [
-        [InlineKeyboardButton("✅ Confirmar", callback_data="confirmar_salvar")],
-        [InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_resumo")],
+        [InlineKeyboardButton("✅ Confirmar e Salvar", callback_data="confirmar_salvar")],
+        [InlineKeyboardButton("❌ Cancelar Tudo", callback_data="cancelar_resumo")],
     ]
     reply_markup = InlineKeyboardMarkup(buttons)
 
-    await message_to_edit.reply_text( # Usar reply_text em vez de edit_message_text para novas mensagens
+    await message_target.reply_text(
         resumo_texto,
         reply_markup=reply_markup,
-        parse_mode=ParseMode.HTML
+        parse_mode=ParseMode.HTML 
     )
 
-    return 'CONFIRMACAO_FINAL' # Retorna o estado CONFIRMACAO_FINAL
+    return 'CONFIRMACAO_FINAL' 
 
 
-# --- Confirmar ---
+# --- Etapa: Confirmação Final de Salvamento ---
 async def confirmacao(update, context):
     query = update.callback_query
     await query.answer()
     data = query.data
 
     if data == "confirmar_salvar":
-        utils.salvar_no_banco(context.user_data) # Certifique-se de que esta função salva o ID da foto no Drive
-        export_data_to_drive() # Esta função deve lidar com os CSVs
-        await query.edit_message_text("✅ Dados salvos com sucesso no banco de dados e Google Drive! Obrigado pelo registro.")
-        context.user_data.clear()
-        return ConversationHandler.END
+        # Salvo os dados no PostgreSQL (usando a função do 'utils.py').
+        utils.salvar_no_banco(context.user_data) 
+        # Aciono a exportação dos dados do PostgreSQL para arquivos Excel no Google Drive.
+        export_data_to_drive() 
+        await query.edit_message_text(
+            "🎉 Dados salvos com sucesso no banco de dados e nos arquivos Excel do Google Drive! Muito obrigado pelo seu registro.", 
+            parse_mode=ParseMode.HTML
+        )
+        context.user_data.clear() # Limpo todos os dados da conversa do usuário.
+        return ConversationHandler.END # Encerro a conversa.
 
     elif data == "cancelar_resumo":
-        await query.edit_message_text("❌ Operação cancelada no resumo. Os dados não foram salvos.")
-        context.user_data.clear()
-        return ConversationHandler.END
+        await query.edit_message_text(
+            "🚫 Operação cancelada no resumo. Os dados não foram salvos. Use /iniciar para começar novamente.", 
+            parse_mode=ParseMode.HTML
+        )
+        context.user_data.clear() # Limpo os dados.
+        return ConversationHandler.END 
     
-# --- Cancelar ---
-# Esta função 'cancelar' já existe no topo do arquivo, então esta é uma duplicata.
-# Certifique-se de que você está usando apenas uma versão da função 'cancelar'
-# e que ela é o fallback do ConversationHandler.
-# async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     await update.message.reply_text("Operação cancelada. Use /iniciar para reiniciar.")
-#     context.user_data.clear()
-#     return ConversationHandler.END
+# --- Função de Fallback para Cancelar ---
+# Esta função é importante! Ela é usada como um "botão de pânico" no ConversationHandler.
+# Se o usuário digitar /cancelar a qualquer momento, esta função será chamada para encerrar a conversa.
+async def cancelar_fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🚫 Operação cancelada. Use /iniciar para reiniciar o registro.")
+    context.user_data.clear()
+    return ConversationHandler.END
+
