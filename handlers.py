@@ -362,7 +362,7 @@ async def demanda_digitar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "texto": update.message.text
     }
     await update.message.reply_text("🔢 Agora, informe o <b>número do OV</b> (Orçamento de Venda) relacionado a esta demanda (se não tiver, digite 'N/A'):", parse_mode=ParseMode.HTML)
-    return 'OV '
+    return 'OV'
 
 # Recebe o número do OV.
 async def ov(update: Update, context: ContextTypes.DEFAULT_TYPE):
