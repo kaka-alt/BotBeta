@@ -58,7 +58,7 @@ async def colaborador_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
         colaborador = data.replace("colaborador_", "") # Removo o prefixo para ter só o nome.
         context.user_data['colaborador'] = colaborador # Salvo o nome no contexto da conversa.
         await query.message.edit_text(f"✅ Colaborador selecionado: <b>{colaborador}</b>.", parse_mode=ParseMode.HTML) # Edito a mensagem anterior para confirmar.
-        await query.message.reply_text("🏠 Perfeito! Agora, digite uma <b>palavra-chave</b> para buscar o <b>órgão público</b> (ex: 'prefeitura' ou 'saúde'):", parse_mode=ParseMode.HTML)
+        await query.message.reply_text("🏠 Perfeito! Agora, digite uma <b>palavra-chave</b> para buscar o <b>órgão público</b> (ex: 'prefeitura' ou 'Vitoria'):", parse_mode=ParseMode.HTML)
         return 'ORGAO_PUBLICO_KEYWORD' # Seguimos para a busca do órgão.
 
 # Lida com a entrada manual do nome do colaborador.
@@ -66,7 +66,7 @@ async def colaborador_manual(update: Update, context: ContextTypes.DEFAULT_TYPE)
     nome = update.message.text.strip() # Pego o texto digitado.
     context.user_data['colaborador'] = nome # Salvo o nome.
     await update.message.reply_text(f"✅ Colaborador registrado: <b>{nome}</b>.", parse_mode=ParseMode.HTML)
-    await update.message.reply_text("🏠 Perfeito! Agora, digite uma <b>palavra-chave</b> para buscar o <b>órgão público</b> (ex: 'prefeitura' ):", parse_mode=ParseMode.HTML)
+    await update.message.reply_text("🏠 Perfeito! Agora, digite uma <b>palavra-chave</b> para buscar o <b>órgão público</b> (ex: 'prefeitura' ou 'Vitoria'):", parse_mode=ParseMode.HTML)
     return 'ORGAO_PUBLICO_KEYWORD' # Seguimos para a busca do órgão.
 
 
