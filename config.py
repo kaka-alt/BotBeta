@@ -41,8 +41,9 @@ os.makedirs(os.path.dirname(CSV_ASSUNTOS), exist_ok=True)
 os.makedirs(os.path.dirname(CSV_REGISTRO), exist_ok=True)
 
 PREDEFINED_ASSUNTOS = [
-    "Atendimento ao Cliente",
-    "Suporte Técnico",
-    "Manutenção Predial",
-    "Gestão de Projetos",
+    "Qualidade De Fornecimento",
+    "Obras",
+    "Dúvidas",
+    "Institucional",
+    "Compartilhantes"
 ]

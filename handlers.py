@@ -66,7 +66,7 @@ async def colaborador_manual(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def solicitar_tipo_visita(update: Update, context: ContextTypes.DEFAULT_TYPE):
     buttons = [
         InlineKeyboardButton("🔄 Reativa", callback_data="tipo_visita_reativa"),
-        InlineKeyboardButton(" proactive Proativa", callback_data="tipo_visita_proativa"),
+        InlineKeyboardButton("🎯 Proativa", callback_data="tipo_visita_proativa"),
     ]
     keyboard = InlineKeyboardMarkup.from_row(buttons)
 
