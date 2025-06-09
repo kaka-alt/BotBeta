@@ -86,43 +86,9 @@ async def tipo_visita_escolha(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data['tipo_visita'] = tipo_visita.capitalize() 
 
     await query.message.edit_text(f"✅ Tipo de visita selecionado: <b>{tipo_visita.capitalize()}</b>.", parse_mode=ParseMode.HTML)
-    # NOVO: Transição para o novo ponto de entrada de Assunto
-    return await solicitar_assunto_inicial(update, context)
-
-
-# --- NOVO: Etapa: Assunto (Menu Inicial e Busca) ---
-async def solicitar_assunto_inicial(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Crio botões com os assuntos pré-definidos do config.py
-    buttons = [InlineKeyboardButton(assunto, callback_data=f"assunto_pre_{assunto}") for assunto in config.PREDEFINED_ASSUNTOS]
-    # Adiciono o botão "Outro"
-    buttons.append(InlineKeyboardButton("Outro (digitar ou buscar)", callback_data="assunto_outro"))
-    keyboard = InlineKeyboardMarkup(utils.build_menu(buttons, n_cols=2)) # Ajuste o número de colunas conforme preferir
-
-    if update.message:
-        await update.message.reply_text("✉️ Por favor, selecione o <b>assunto</b> da ocorrência nas opções abaixo:", reply_markup=keyboard, parse_mode=ParseMode.HTML)
-    elif update.callback_query:
-        await update.callback_query.message.reply_text("✉️ Por favor, selecione o <b>assunto</b> da ocorrência nas opções abaixo:", reply_markup=keyboard, parse_mode=ParseMode.HTML)
-
-    return ASSUNTO_INICIAL_ESCOLHA # Novo estado para lidar com a escolha inicial
-
-async def assunto_inicial_escolha(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-
-    if data == "assunto_outro":
-        # Se o usuário escolheu "Outro", pedimos a palavra-chave ou assunto completo.
-        await query.message.edit_text("✍️ Entendido. Por favor, digite uma <b>palavra-chave</b> para buscar ou o <b>assunto completo</b> que deseja registrar:", parse_mode=ParseMode.HTML)
-        return ASSUNTO_PALAVRA_CHAVE # Transita para o estado de busca/digitação manual.
-    else:
-        # Se o usuário selecionou um assunto pré-definido.
-        assunto_selecionado = data.replace("assunto_pre_", "")
-        context.user_data["assunto"] = assunto_selecionado
-        await query.message.edit_text(f"✅ Assunto selecionado: <b>{assunto_selecionado}</b>.", parse_mode=ParseMode.HTML)
-        await query.message.reply_text("🏙️ Quase lá! Em qual <b>município</b> a ocorrência aconteceu?", parse_mode=ParseMode.HTML)
-        return MUNICIPIO # Continua o fluxo para o município.
-
-# --- FIM NOVO: Etapa: Assunto (Menu Inicial e Busca) ---
+    # FLUXO CORRIGIDO: Após o tipo de visita, segue para Órgão Público
+    await query.message.reply_text("🏠 Perfeito! Agora, digite uma <b>palavra-chave</b> para buscar o <b>órgão público</b> (ex: 'prefeitura' ou 'saúde'):", parse_mode=ParseMode.HTML)
+    return ORGAO_PUBLICO_KEYWORD # Continua o fluxo para o órgão público.
 
 
 # --- Etapa: Órgão Público ---
@@ -209,8 +175,42 @@ async def cargo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cargo = update.message.text.strip()
     context.user_data['cargo'] = cargo
     await update.message.reply_text(f"✅ Cargo registrado: <b>{cargo}</b>.", parse_mode=ParseMode.HTML)
-    # NOVO: Transição para o novo ponto de entrada de Assunto
+    # FLUXO CORRIGIDO: Após o Cargo, segue para o menu inicial de Assunto
     return await solicitar_assunto_inicial(update, context)
+
+
+# --- Etapa: Assunto (Menu Inicial e Busca) ---
+async def solicitar_assunto_inicial(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Crio botões com os assuntos pré-definidos do config.py
+    buttons = [InlineKeyboardButton(assunto, callback_data=f"assunto_pre_{assunto}") for assunto in config.PREDEFINED_ASSUNTOS]
+    # Adiciono o botão "Outro"
+    buttons.append(InlineKeyboardButton("Outro (digitar ou buscar)", callback_data="assunto_outro"))
+    keyboard = InlineKeyboardMarkup(utils.build_menu(buttons, n_cols=2)) # Ajuste o número de colunas conforme preferir
+
+    if update.message:
+        await update.message.reply_text("✉️ Por favor, selecione o <b>assunto</b> da ocorrência nas opções abaixo:", reply_markup=keyboard, parse_mode=ParseMode.HTML)
+    elif update.callback_query:
+        await update.callback_query.message.reply_text("✉️ Por favor, selecione o <b>assunto</b> da ocorrência nas opções abaixo:", reply_markup=keyboard, parse_mode=ParseMode.HTML)
+
+    return ASSUNTO_INICIAL_ESCOLHA # Novo estado para lidar com a escolha inicial
+
+async def assunto_inicial_escolha(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    if data == "assunto_outro":
+        # Se o usuário escolheu "Outro", pedimos a palavra-chave ou assunto completo.
+        await query.message.edit_text("✍️ Entendido. Por favor, digite uma <b>palavra-chave</b> para buscar ou o <b>assunto completo</b> que deseja registrar:", parse_mode=ParseMode.HTML)
+        return ASSUNTO_PALAVRA_CHAVE # Transita para o estado de busca/digitação manual.
+    else:
+        # Se o usuário selecionou um assunto pré-definido.
+        assunto_selecionado = data.replace("assunto_pre_", "")
+        context.user_data["assunto"] = assunto_selecionado
+        await query.message.edit_text(f"✅ Assunto selecionado: <b>{assunto_selecionado}</b>.", parse_mode=ParseMode.HTML)
+        # FLUXO CORRIGIDO: Após selecionar ou digitar o assunto, segue para o Município
+        await query.message.reply_text("🏙️ Quase lá! Em qual <b>município</b> a ocorrência aconteceu?", parse_mode=ParseMode.HTML)
+        return MUNICIPIO # Continua o fluxo para o município.
 
 
 # --- Etapa: Assunto (Lógica de Busca/Paginação Existente) ---
@@ -266,6 +266,7 @@ async def assunto_paginacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
         assunto_selecionado = data.replace("assunto_", "")
         context.user_data["assunto"] = assunto_selecionado
         await query.message.edit_text(f"✅ Assunto selecionado: <b>{assunto_selecionado}</b>.", parse_mode=ParseMode.HTML)
+        # FLUXO CORRIGIDO: Após selecionar ou digitar o assunto, segue para o Município
         await query.message.reply_text("🏙️ Quase lá! Em qual <b>município</b> a ocorrência aconteceu?", parse_mode=ParseMode.HTML)
         return MUNICIPIO
 
@@ -275,6 +276,7 @@ async def assunto_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['assunto'] = assunto
     utils.salvar_assunto(assunto) 
     await update.message.reply_text(f"✅ Assunto registrado: <b>{assunto}</b>.", parse_mode=ParseMode.HTML)
+    # FLUXO CORRIGIDO: Após digitar o assunto manualmente, segue para o Município
     await update.message.reply_text("🏙️ Quase lá! Em qual <b>município</b> a ocorrência aconteceu?", parse_mode=ParseMode.HTML)
     return MUNICIPIO
 
@@ -482,7 +484,7 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     resumo_texto = (
         f"✨ <b>Resumo da Ocorrência:</b> ✨\n\n"
         f"👤 <b>Colaborador:</b> {dados.get('colaborador', 'N/A')}\n"
-        f"🤝 <b>Tipo de Visita:</b> {dados.get('tipo_visita', 'N/A')}\n" # ADICIONADO: Tipo de Visita
+        f"🤝 <b>Tipo de Visita:</b> {dados.get('tipo_visita', 'N/A')}\n" 
         f"🏢 <b>Órgão Público:</b> {dados.get('orgao_publico', 'N/A')}\n"
         f"🧑‍💼 <b>Figura Pública:</b> {dados.get('figura_publica', 'N/A')}\n"
         f"💼 <b>Cargo:</b> {dados.get('cargo', 'N/A')}\n"

@@ -116,7 +116,7 @@ async def telegram_webhook_receiver(request: Request):
             try:
                 await application.bot.send_message(
                     chat_id=update.effective_chat.id,
-                    text="❗ Olá! Eu acabei de acordar e estou pronto para processar sua solicitação. Por favor, aguarde a resposta ao seu comando."
+                    text="👋 Olá! Eu acabei de acordar e estou pronto para processar sua solicitação. Por favor, aguarde a resposta ao seu comando."
                 )
                 logger.info(f"Notificação de 'bot acordado' enviada para o usuário {update.effective_chat.id}.")
                 bot_just_started = False 
@@ -162,13 +162,14 @@ async def startup_event():
                 handlers.COLABORADOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.colaborador_manual), CallbackQueryHandler(handlers.colaborador_button)],
                 handlers.COLABORADOR_MANUAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.colaborador_manual)],
                 handlers.TIPO_VISITA: [CallbackQueryHandler(handlers.tipo_visita_escolha)], 
-                # NOVO ESTADO E HANDLER PARA O MENU INICIAL DE ASSUNTO
-                handlers.ASSUNTO_INICIAL_ESCOLHA: [CallbackQueryHandler(handlers.assunto_inicial_escolha)],
+                # ORDEM CORRIGIDA: ÓRGÃO PÚBLICO vem ANTES de ASSUNTO agora.
                 handlers.ORGAO_PUBLICO_KEYWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.buscar_orgao)],
                 handlers.ORGAO_PUBLICO_PAGINACAO: [CallbackQueryHandler(handlers.orgao_paginacao)],
                 handlers.ORGAO_PUBLICO_MANUAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.orgao_manual)],
                 handlers.FIGURA_PUBLICA: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.figura_publica_input)],
                 handlers.CARGO: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.cargo)],
+                # NOVO PONTO DE ENTRADA E HANDLER PARA O MENU INICIAL DE ASSUNTO
+                handlers.ASSUNTO_INICIAL_ESCOLHA: [CallbackQueryHandler(handlers.assunto_inicial_escolha)],
                 # A PARTIR DAQUI, O FLUXO DE ASSUNTO PODE SER ACESSADO PELA ESCOLHA INICIAL OU POR BUSCA
                 handlers.ASSUNTO_PALAVRA_CHAVE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.buscar_assunto)],
                 handlers.ASSUNTO_PAGINACAO: [CallbackQueryHandler(handlers.assunto_paginacao)],
@@ -237,7 +238,6 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     logger.info(f"Running Uvicorn directly via __main__ on port: {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
-
 
 
 @app.get("/ping")
