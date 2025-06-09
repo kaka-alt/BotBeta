@@ -161,13 +161,15 @@ async def startup_event():
             states={
                 handlers.COLABORADOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.colaborador_manual), CallbackQueryHandler(handlers.colaborador_button)],
                 handlers.COLABORADOR_MANUAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.colaborador_manual)],
-                # NOVO ESTADO: TIPO_VISITA
-                handlers.TIPO_VISITA: [CallbackQueryHandler(handlers.tipo_visita_escolha)], # Lida com os botões de Reativa/Proativa
+                handlers.TIPO_VISITA: [CallbackQueryHandler(handlers.tipo_visita_escolha)], 
+                # NOVO ESTADO E HANDLER PARA O MENU INICIAL DE ASSUNTO
+                handlers.ASSUNTO_INICIAL_ESCOLHA: [CallbackQueryHandler(handlers.assunto_inicial_escolha)],
                 handlers.ORGAO_PUBLICO_KEYWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.buscar_orgao)],
                 handlers.ORGAO_PUBLICO_PAGINACAO: [CallbackQueryHandler(handlers.orgao_paginacao)],
                 handlers.ORGAO_PUBLICO_MANUAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.orgao_manual)],
                 handlers.FIGURA_PUBLICA: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.figura_publica_input)],
                 handlers.CARGO: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.cargo)],
+                # A PARTIR DAQUI, O FLUXO DE ASSUNTO PODE SER ACESSADO PELA ESCOLHA INICIAL OU POR BUSCA
                 handlers.ASSUNTO_PALAVRA_CHAVE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.buscar_assunto)],
                 handlers.ASSUNTO_PAGINACAO: [CallbackQueryHandler(handlers.assunto_paginacao)],
                 handlers.ASSUNTO_MANUAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.assunto_manual)],
@@ -183,7 +185,7 @@ async def startup_event():
                 handlers.OBSERVACAO_DIGITAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.observacao_digitar)],
                 handlers.CONFIRMACAO_FINAL: [CallbackQueryHandler(handlers.confirmacao)],
             },
-            fallbacks=[CommandHandler('cancelar', cancelar)], # Usando a função cancelar do main.py
+            fallbacks=[CommandHandler('cancelar', cancelar)], 
         )
         application.add_handler(conv_handler)
         logger.info("Handlers de conversação ativados.")
@@ -235,6 +237,8 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     logger.info(f"Running Uvicorn directly via __main__ on port: {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
+
+
 
 @app.get("/ping")
 async def ping_endpoint():
