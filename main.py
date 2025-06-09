@@ -116,7 +116,7 @@ async def telegram_webhook_receiver(request: Request):
             try:
                 await application.bot.send_message(
                     chat_id=update.effective_chat.id,
-                    text="👋 Olá! Eu acabei de acordar e estou pronto para processar sua solicitação. Por favor, aguarde a resposta ao seu comando."
+                    text="❗ Olá! Eu acabei de acordar e estou pronto para processar sua solicitação. Por favor, aguarde a resposta ao seu comando."
                 )
                 logger.info(f"Notificação de 'bot acordado' enviada para o usuário {update.effective_chat.id}.")
                 bot_just_started = False 
