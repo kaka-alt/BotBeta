@@ -399,7 +399,7 @@ async def demanda_digitar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Recebe o número do OV.
 async def ov(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["nova_demanda"]["ov"] = update.message.text
-    await update.message.reply_text("🔢 E qual o <b>número do PRO</b> (Projeto) relacionado (se não tiver, digite 'N/A')?", parse_mode=ParseMode.HTML)
+    await update.message.reply_text("🔢 E qual o <b>número do PRO</b> (Protocolo) relacionado (se não tiver, digite 'N/A')?", parse_mode=ParseMode.HTML)
     return PRO 
 
 # Recebe o número do PRO.
