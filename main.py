@@ -162,12 +162,22 @@ async def startup_event():
                 handlers.COLABORADOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.colaborador_manual), CallbackQueryHandler(handlers.colaborador_button)],
                 handlers.COLABORADOR_MANUAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.colaborador_manual)],
                 handlers.TIPO_VISITA: [CallbackQueryHandler(handlers.tipo_visita_escolha)], 
-                # ORDEM CORRIGIDA: ÓRGÃO PÚBLICO vem ANTES de ASSUNTO agora.
-                handlers.ORGAO_PUBLICO_KEYWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.buscar_orgao)],
-                handlers.ORGAO_PUBLICO_PAGINACAO: [CallbackQueryHandler(handlers.orgao_paginacao)],
-                handlers.ORGAO_PUBLICO_MANUAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.orgao_manual)],
-                handlers.FIGURA_PUBLICA: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.figura_publica_input)],
-                handlers.CARGO: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.cargo)],
+                # NOVO FLUXO PARA MULTIPLAS FIGURAS/ORGAOS
+                handlers.ORGAO_FIGURA_CARGO_ESCOLHA: [CallbackQueryHandler(handlers.figura_orgao_escolha)],
+                handlers.ORGAO_PUBLICO_FOR_FIGURA_KEYWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.buscar_orgao_for_figura)],
+                handlers.ORGAO_PUBLICO_FOR_FIGURA_PAGINACAO: [CallbackQueryHandler(handlers.orgao_paginacao_for_figura)],
+                handlers.ORGAO_PUBLICO_FOR_FIGURA_MANUAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.orgao_manual_for_figura)],
+                handlers.FIGURA_PUBLICA_FOR_FIGURA: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.figura_publica_input_for_figura)],
+                handlers.CARGO_FOR_FIGURA: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.cargo_input_for_figura)],
+                handlers.MAIS_FIGURAS_ORGAOS: [CallbackQueryHandler(handlers.salvar_figura_orgao_set)], # Volta para a escolha ou finaliza
+                # FIM DO NOVO FLUXO PARA MULTIPLAS FIGURAS/ORGAOS
+                
+                # O FLUXO ANTIGO DE ORGAO_PUBLICO, FIGURA_PUBLICA, CARGO SERÁ REMOVIDO OU REPOSICIONADO APÓS ISSO.
+                # Como a nova estrutura de Figuras/Órgãos agora substitui o antigo fluxo de um-para-um,
+                # as referências a ORGAO_PUBLICO_KEYWORD, FIGURA_PUBLICA e CARGO DIRETOS
+                # no main ConversationHandler devem ser removidas OU o fluxo precisa ser ajustado
+                # para que eles não sejam mais chamados APÓS o novo fluxo de múltiplos.
+
                 # NOVO PONTO DE ENTRADA E HANDLER PARA O MENU INICIAL DE ASSUNTO
                 handlers.ASSUNTO_INICIAL_ESCOLHA: [CallbackQueryHandler(handlers.assunto_inicial_escolha)],
                 # A PARTIR DAQUI, O FLUXO DE ASSUNTO PODE SER ACESSADO PELA ESCOLHA INICIAL OU POR BUSCA
@@ -239,12 +249,3 @@ if __name__ == "__main__":
     logger.info(f"Running Uvicorn directly via __main__ on port: {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
 
-
-@app.get("/ping")
-async def ping_endpoint():
-    """
-    Endpoint simples para monitoramento de disponibilidade.
-    Apenas retorna um status "OK" para indicar que o serviço está ativo.
-    """
-    logger.info("Requisição GET recebida no endpoint /ping. Bot está ativo.")
-    return {"status": "OK", "message": "Bot is alive!"}
