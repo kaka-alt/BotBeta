@@ -45,6 +45,10 @@ def botoes_pagina(lista, pagina, prefix="", por_pagina=5):
 
 # Lista de Órgãos Públicos
 def ler_orgaos_csv():
+    # Adicionado tratamento para arquivo inexistente
+    if not os.path.exists(CSV_ORGAOS):
+        logger.warning(f"CSV de órgãos não encontrado em {CSV_ORGAOS}. Criando um DataFrame vazio.")
+        return pd.DataFrame(columns=['nome'])
     df = pd.read_csv(CSV_ORGAOS)
     return df['nome'].dropna().tolist()
 
@@ -66,6 +70,10 @@ def salvar_orgao(novo_orgao: str):
 
 # Lista Assuntos
 def ler_assuntos_csv():
+    # Adicionado tratamento para arquivo inexistente
+    if not os.path.exists(CSV_ASSUNTOS):
+        logger.warning(f"CSV de assuntos não encontrado em {CSV_ASSUNTOS}. Criando um DataFrame vazio.")
+        return pd.DataFrame(columns=['assunto'])
     df = pd.read_csv(CSV_ASSUNTOS)
     return df['assunto'].dropna().tolist()
 
@@ -89,14 +97,13 @@ def salvar_assunto(novo_assunto: str):
 def conectar_banco():
     """Conecta ao banco de dados PostgreSQL."""
     try:
-        # Pega a URL de conexão do Render.
         url = os.environ.get("DATABASE_PUBLIC_URL")
         if not url:
             raise ValueError("DATABASE_PUBLIC_URL não está configurada nas variáveis de ambiente.")
         
         parsed_url = urllib.parse.urlparse(url)
 
-        dbname = parsed_url.path[1:] # Remove a primeira barra
+        dbname = parsed_url.path[1:] 
         user = parsed_url.username
         password = parsed_url.password
         host = parsed_url.hostname
@@ -109,9 +116,10 @@ def conectar_banco():
             host=host,
             port=port
         )
+        logger.info("Conexão com o banco de dados PostgreSQL estabelecida com sucesso.")
         return conn
     except Exception as e:
-        logger.error(f"Erro ao conectar ao banco de dados: {e}")
+        logger.error(f"Erro ao conectar ao banco de dados: {e}", exc_info=True)
         return None
 
 def salvar_no_banco(data: dict):
@@ -119,6 +127,7 @@ def salvar_no_banco(data: dict):
 
     conn = conectar_banco() 
     if conn is None:
+        logger.error("Não foi possível conectar ao banco de dados para salvar a ocorrência.")
         return 
 
     cursor = conn.cursor() 
@@ -127,36 +136,38 @@ def salvar_no_banco(data: dict):
         data_str = data.get('data')
         data_date = datetime.strptime(data_str, '%Y-%m-%d').date() if isinstance(data_str, str) else data_str
 
-        # 1. Inserir na tabela 'registros' (agora sem as colunas de órgão/figura/cargo diretamente)
-        # As colunas orgao_publico, figura_publica, cargo foram removidas da tabela registros
         cursor.execute("""
             INSERT INTO registros (
                 colaborador, tipo_visita, assunto, municipio, data, foto
             ) VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING id; -- Retorna o ID do registro recém-criado
+            RETURNING id; 
         """, (
             data.get('colaborador'), data.get('tipo_visita'),
             data.get('assunto'), data.get('municipio'),
             data_date, 
             data.get('foto')
         ))
-        registro_id = cursor.fetchone()[0] # Pega o ID do registro principal
+        registro_id = cursor.fetchone()[0] 
+        logger.info(f"Ocorrência principal salva. Registro ID: {registro_id}")
 
-        # 2. Inserir na nova tabela 'ocorrencias_figuras_orgaos'
         figuras_orgaos = data.get('figuras_orgaos', [])
-        for fo_set in figuras_orgaos:
-            cursor.execute("""
-                INSERT INTO ocorrencias_figuras_orgaos (
-                    registro_id, orgao_publico, figura_publica, cargo
-                ) VALUES (%s, %s, %s, %s)
-            """, (
-                registro_id, 
-                fo_set.get('orgao_publico'),
-                fo_set.get('figura_publica'),
-                fo_set.get('cargo')
-            ))
+        if figuras_orgaos:
+            for fo_set in figuras_orgaos:
+                cursor.execute("""
+                    INSERT INTO ocorrencias_figuras_orgaos (
+                        registro_id, orgao_publico, figura_publica, cargo
+                    ) VALUES (%s, %s, %s, %s)
+                """, (
+                    registro_id, 
+                    fo_set.get('orgao_publico'),
+                    fo_set.get('figura_publica'),
+                    fo_set.get('cargo')
+                ))
+            logger.info(f"{len(figuras_orgaos)} figuras/órgãos salvos para o Registro ID: {registro_id}")
+        else:
+            logger.info(f"Nenhuma figura/órgão para salvar para o Registro ID: {registro_id}")
 
-        # 3. Inserir na tabela 'demandas'
+
         demandas = data.get('demandas', [])
         if demandas:
             for demanda in demandas:
@@ -165,18 +176,23 @@ def salvar_no_banco(data: dict):
                         registro_id, texto, ov, pro, observacao
                     ) VALUES (%s, %s, %s, %s, %s)
                 """, (
-                    registro_id, # Referencia o ID do registro principal
+                    registro_id, 
                     demanda.get('texto'), demanda.get('ov'),
                     demanda.get('pro'), demanda.get('observacao')
                 ))
+            logger.info(f"{len(demandas)} demandas salvas para o Registro ID: {registro_id}")
+        else:
+            logger.info(f"Nenhuma demanda para salvar para o Registro ID: {registro_id}")
 
         conn.commit() 
-        logger.info(f"Dados da ocorrência (ID: {registro_id}) salvos no PostgreSQL!")
+        logger.info(f"Transação para o Registro ID: {registro_id} concluída no PostgreSQL!")
 
     except psycopg2.Error as e:
         conn.rollback() 
-        logger.error(f"Erro ao salvar no banco de dados: {e}")
-
+        logger.error(f"Erro ao salvar no banco de dados para o Registro ID: {registro_id}. Detalhes: {e}", exc_info=True)
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Erro inesperado ao salvar no banco de dados para o Registro ID: {registro_id}. Detalhes: {e}", exc_info=True)
     finally:
         cursor.close() 
         conn.close() 
@@ -192,6 +208,7 @@ def get_drive_service():
         info = json.loads(creds_json)
         credentials = Credentials.from_info(info, scopes=['https://www.googleapis.com/auth/drive'])
         service = build('drive', 'v3', credentials=credentials)
+        logger.info("Serviço do Google Drive autenticado com sucesso.")
         return service
     except Exception as e:
         logger.error(f"Erro ao obter serviço do Google Drive: {e}", exc_info=True)
@@ -205,43 +222,58 @@ def export_data_to_drive():
     logger.info("Iniciando exportação de dados para o Google Drive...")
     drive_service = get_drive_service()
     if not drive_service:
+        logger.error("Serviço do Google Drive não disponível, abortando exportação.")
         return
 
     conn = conectar_banco()
     if conn is None:
+        logger.error("Não foi possível conectar ao banco de dados para exportação.")
         return
+
+    excel_path = None 
 
     try:
         # Consultar dados da tabela 'registros'
         df_registros = pd.read_sql("SELECT * FROM registros ORDER BY id DESC", conn)
-        logger.info(f"Registros encontrados: {len(df_registros)}")
+        logger.info(f"DataFrame 'registros' carregado. Linhas: {len(df_registros)}.")
 
         # Consultar dados da tabela 'demandas'
         df_demandas = pd.read_sql("SELECT * FROM demandas ORDER BY id DESC", conn)
-        logger.info(f"Demandas encontradas: {len(df_demandas)}")
+        logger.info(f"DataFrame 'demandas' carregado. Linhas: {len(df_demandas)}.")
 
         # Consultar dados da nova tabela 'ocorrencias_figuras_orgaos'
         df_figuras_orgaos = pd.read_sql("SELECT * FROM ocorrencias_figuras_orgaos ORDER BY id DESC", conn)
-        logger.info(f"Figuras/Órgãos encontrados: {len(df_figuras_orgaos)}")
+        logger.info(f"DataFrame 'ocorrencias_figuras_orgaos' carregado. Linhas: {len(df_figuras_orgaos)}.")
+        logger.debug(f"Conteúdo de df_figuras_orgaos:\n{df_figuras_orgaos.head()}") # Mostrar as primeiras linhas para debug
 
         # Criar um arquivo Excel com múltiplas planilhas
         excel_file_name = f"Dados_Ocorrencias_Bot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        excel_path = os.path.join("/tmp", excel_file_name) # Usar /tmp para escrita temporária
+        excel_path = os.path.join("/tmp", excel_file_name) 
 
         with pd.ExcelWriter(excel_path, engine='xlsxwriter') as writer:
-            df_registros.to_excel(writer, sheet_name='Ocorrencias Principais', index=False)
-            df_figuras_orgaos.to_excel(writer, sheet_name='Figuras e Orgaos', index=False) # Nova planilha
-            df_demandas.to_excel(writer, sheet_name='Demandas', index=False)
+            if not df_registros.empty:
+                df_registros.to_excel(writer, sheet_name='Ocorrencias Principais', index=False)
+                logger.info("Planilha 'Ocorrencias Principais' adicionada ao Excel.")
+            else:
+                logger.warning("DataFrame de 'Ocorrencias Principais' vazio. Planilha não será criada ou estará vazia.")
+            
+            if not df_figuras_orgaos.empty:
+                df_figuras_orgaos.to_excel(writer, sheet_name='Figuras e Orgaos', index=False)
+                logger.info("Planilha 'Figuras e Orgaos' adicionada ao Excel.")
+            else:
+                logger.warning("DataFrame de 'Figuras e Orgaos' vazio. Planilha não será criada ou estará vazia.")
 
-        # Buscar arquivo existente no Google Drive para substituir ou criar novo
+            if not df_demandas.empty:
+                df_demandas.to_excel(writer, sheet_name='Demandas', index=False)
+                logger.info("Planilha 'Demandas' adicionada ao Excel.")
+            else:
+                logger.warning("DataFrame de 'Demandas' vazio. Planilha não será criada ou estará vazia.")
+
+        logger.info(f"Arquivo Excel temporário '{excel_file_name}' criado em {excel_path}.")
+
         folder_id = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
         if not folder_id:
             raise ValueError("GOOGLE_DRIVE_FOLDER_ID não está configurada nas variáveis de ambiente.")
-
-        # Busca por um arquivo com nome similar na pasta
-        # Para substituir, a melhor abordagem é buscar pelo nome exato e então atualizar
-        # Ou simplesmente criar um novo arquivo com timestamp, como já está.
-        # Vamos criar sempre um novo arquivo com timestamp para não complicar o replace.
 
         file_metadata = {
             'name': excel_file_name,
@@ -258,10 +290,9 @@ def export_data_to_drive():
     finally:
         if conn:
             conn.close()
-        # Limpar arquivo temporário
-        if os.path.exists(excel_path):
+        if excel_path and os.path.exists(excel_path):
             os.remove(excel_path)
-
+            logger.info(f"Arquivo temporário '{excel_path}' removido.")
 
 # Função auxiliar para upload de foto (usada por handlers.py)
 async def upload_photo_to_drive(photo_bytes: bytes, filename: str):
@@ -278,8 +309,6 @@ async def upload_photo_to_drive(photo_bytes: bytes, filename: str):
         logger.error("GOOGLE_DRIVE_FOLDER_ID não configurada para upload de foto.")
         return None
 
-    # Salva o arquivo temporariamente no sistema de arquivos local
-    # No Render, /tmp é o diretório recomendado para arquivos temporários.
     temp_filepath = os.path.join("/tmp", filename)
     try:
         with open(temp_filepath, "wb") as f:
@@ -288,7 +317,7 @@ async def upload_photo_to_drive(photo_bytes: bytes, filename: str):
         file_metadata = {
             'name': filename,
             'parents': [folder_id],
-            'mimeType': 'image/jpeg' # Assumindo JPG, Telegram frequentemente converte para JPG
+            'mimeType': 'image/jpeg' 
         }
         media = MediaFileUpload(temp_filepath, mimetype='image/jpeg', resumable=True)
 
@@ -298,6 +327,5 @@ async def upload_photo_to_drive(photo_bytes: bytes, filename: str):
         logger.error(f"Erro ao fazer upload da foto para o Google Drive: {e}", exc_info=True)
         return None
     finally:
-        # Limpa o arquivo temporário
         if os.path.exists(temp_filepath):
             os.remove(temp_filepath)
