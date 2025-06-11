@@ -1,4 +1,4 @@
-python-telegram-bot==20.X.X  # Use a versão que você já está usando, ex: 20.6
+python-telegram-bot==20.6 # Use a versão que você já está usando, ex: 20.6
 fastapi
 uvicorn
 pandas
