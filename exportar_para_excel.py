@@ -1,208 +1,181 @@
-import os
 import json
-import logging
+import os
 import pandas as pd
 from datetime import datetime
-from io import BytesIO
-
-# Importação CORRETA para credenciais de conta de serviço
-from google.oauth2.service_account import Credentials 
+import psycopg2 
+import urllib.parse
+import logging
+from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaIoBaseUpload
+from googleapiclient.http import MediaFileUpload
 
-# Importar a função de conexão com o banco de dados do utils.py
-from utils import conectar_banco # Importa a função conectar_banco
-
-# Configuração de logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# --- Variáveis de Ambiente para Google Drive (lidas do ambiente do Render) ---
-GOOGLE_CREDENTIALS_JSON = os.environ.get("GOOGLE_CREDENTIALS_JSON")
-GOOGLE_DRIVE_FOLDER_ID = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
-GOOGLE_DRIVE_PHOTOS_FOLDER_ID = os.environ.get("GOOGLE_DRIVE_PHOTOS_FOLDER_ID")
+# --- FUNÇÕES PARA CONEXÃO COM O BANCO DE DADOS E GOOGLE DRIVE ---
 
+def conectar_banco():
+    """Conecta ao banco de dados PostgreSQL."""
+    try:
+        url = os.environ.get("DATABASE_PUBLIC_URL")
+        if not url:
+            raise ValueError("DATABASE_PUBLIC_URL não está configurada nas variáveis de ambiente.")
+        
+        parsed_url = urllib.parse.urlparse(url)
 
-if not GOOGLE_CREDENTIALS_JSON:
-    logger.error("GOOGLE_CREDENTIALS_JSON não definida. As funções do Drive não poderão ser usadas.")
-if not GOOGLE_DRIVE_FOLDER_ID:
-    logger.warning("GOOGLE_DRIVE_FOLDER_ID não definida. Arquivos Excel serão salvos na raiz do Drive.")
-if not GOOGLE_DRIVE_PHOTOS_FOLDER_ID:
-    logger.warning("GOOGLE_DRIVE_PHOTOS_FOLDER_ID não definida. Fotos serão salvas na pasta principal de Excel ou na raiz do Drive.")
+        dbname = parsed_url.path[1:] 
+        user = parsed_url.username
+        password = parsed_url.password
+        host = parsed_url.hostname
+        port = parsed_url.port
 
-
-# --- Funções Auxiliares para Google Drive ---
+        conn = psycopg2.connect(
+            dbname=dbname,
+            user=user,
+            password=password,
+            host=host,
+            port=port
+        )
+        logger.info("Conexão com o banco de dados PostgreSQL estabelecida com sucesso.")
+        return conn
+    except Exception as e:
+        logger.error(f"Erro ao conectar ao banco de dados: {e}", exc_info=True)
+        return None
 
 def get_drive_service():
-    """
-    Autentica e retorna o objeto de serviço do Google Drive API.
-    Lê as credenciais da variável de ambiente GOOGLE_CREDENTIALS_JSON.
-    """
-    if not GOOGLE_CREDENTIALS_JSON:
-        raise ValueError("GOOGLE_CREDENTIALS_JSON não configurado. Não é possível autenticar no Google Drive.")
-    
+    """Autentica com a API do Google Drive usando credenciais JSON."""
     try:
-        creds_info = json.loads(GOOGLE_CREDENTIALS_JSON)
+        creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+        if not creds_json:
+            raise ValueError("GOOGLE_CREDENTIALS_JSON não está configurada nas variáveis de ambiente.")
         
-        creds = Credentials.from_service_account_info(
-            info=creds_info, 
-            scopes=['https://www.googleapis.com/auth/drive'] 
-        )
-
-        service = build('drive', 'v3', credentials=creds)
+        info = json.loads(creds_json)
+        credentials = Credentials.from_info(info, scopes=['https://www.googleapis.com/auth/drive'])
+        service = build('drive', 'v3', credentials=credentials)
         logger.info("Serviço do Google Drive API autenticado com sucesso.")
         return service
     except Exception as e:
-        logger.error(f"Erro ao autenticar no Google Drive: {e}", exc_info=True)
-        raise
-
-def _get_file_id_by_name(service, filename: str, folder_id: str = None) -> str | None:
-    """
-    Busca o ID de um arquivo pelo nome em uma pasta específica do Google Drive.
-    Retorna o ID do arquivo se encontrado, caso contrário, retorna None.
-    """
-    query = f"name='{filename}' and trashed=false"
-    if folder_id:
-        query += f" and '{folder_id}' in parents"
-    
-    try:
-        results = service.files().list(q=query, fields='files(id)').execute()
-        files = results.get('files', [])
-        if files:
-            logger.info(f"Arquivo '{filename}' encontrado no Drive com ID: {files[0]['id']}.")
-            return files[0]['id']
-        logger.info(f"Arquivo '{filename}' não encontrado no Drive.")
-        return None
-    except HttpError as error:
-        logger.error(f"Erro ao buscar arquivo '{filename}' no Google Drive: {error}")
-        return None
-    except Exception as e:
-        logger.error(f"Erro inesperado ao buscar arquivo '{filename}': {e}", exc_info=True)
+        logger.error(f"Erro ao obter serviço do Google Drive: {e}", exc_info=True)
         return None
 
-def _download_file_content(service, file_id: str) -> str:
-    """
-    Baixa o conteúdo de um arquivo do Google Drive e o retorna como uma string UTF-8.
-    """
-    try:
-        response = service.files().get_media(fileId=file_id).execute()
-        logger.info(f"Conteúdo do arquivo {file_id} baixado com sucesso.")
-        return response.decode('utf-8')
-    except HttpError as error:
-        logger.error(f"Erro ao baixar conteúdo do arquivo {file_id}: {error}")
-        raise
-    except Exception as e:
-        logger.error(f"Erro inesperado ao baixar conteúdo do arquivo {file_id}: {e}", exc_info=True)
-        raise
-
-# --- FUNÇÃO ATUALIZADA PARA UPLOAD DE EXCEL (XLSX) ---
-def _upload_or_update_excel(service, filename: str, df: pd.DataFrame, folder_id: str = None):
-    """
-    Cria um novo arquivo XLSX no Google Drive ou sobrescreve um existente
-    com o conteúdo do DataFrame fornecido.
-    """
-    file_id = _get_file_id_by_name(service, filename, folder_id)
-    
-    # Salva o DataFrame em um buffer de bytes no formato XLSX
-    excel_buffer = BytesIO()
-    df.to_excel(excel_buffer, index=False, engine='openpyxl')
-    excel_buffer.seek(0) # Volta para o início do buffer
-    
-    media_body = MediaIoBaseUpload(excel_buffer,
-                                   mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                                   resumable=True)
-
-    if file_id:
-        try:
-            service.files().update(fileId=file_id, media_body=media_body).execute()
-            logger.info(f"Arquivo Excel '{filename}' atualizado no Google Drive (ID: {file_id}).")
-        except HttpError as error:
-            logger.error(f"Erro ao atualizar arquivo Excel '{filename}' (ID: {file_id}): {error}")
-            raise
-        except Exception as e:
-            logger.error(f"Erro inesperado ao atualizar arquivo Excel '{filename}' (ID: {file_id}): {e}", exc_info=True)
-            raise
-    else:
-        file_metadata = {'name': filename, 'mimeType': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}
-        if folder_id:
-            file_metadata['parents'] = [folder_id]
-        try:
-            file = service.files().create(body=file_metadata, media_body=media_body, fields='id').execute()
-            logger.info(f"Arquivo Excel '{filename}' criado no Google Drive com ID: '{file.get('id')}'")
-        except HttpError as error:
-            logger.error(f"Erro ao criar arquivo Excel '{filename}': {error}")
-            raise
-        except Exception as e:
-            logger.error(f"Erro inesperado ao criar arquivo Excel '{filename}': {e}", exc_info=True)
-            raise
-
-async def upload_photo_to_drive(file_bytes: bytes, filename: str) -> str | None:
-    """
-    Faz o upload de uma foto para o Google Drive na pasta de fotos específica.
-    Retorna o ID do arquivo no Drive.
-    """
-    try:
-        service = get_drive_service()
-        
-        target_folder_id = GOOGLE_DRIVE_PHOTOS_FOLDER_ID if GOOGLE_DRIVE_PHOTOS_FOLDER_ID else GOOGLE_DRIVE_FOLDER_ID
-        
-        file_metadata = {
-            'name': filename,
-            'mimeType': 'image/jpeg' 
-        }
-        if target_folder_id:
-            file_metadata['parents'] = [target_folder_id] 
-
-        media = MediaIoBaseUpload(BytesIO(file_bytes), mimetype='image/jpeg', resumable=True)
-        
-        uploaded_file = service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields='id'
-        ).execute()
-
-        file_id = uploaded_file.get('id')
-        logger.info(f"Foto '{filename}' enviada para o Google Drive (pasta: {target_folder_id}) com ID: {file_id}")
-        return file_id
-    except HttpError as error:
-        logger.error(f"Erro HTTP ao fazer upload da foto para o Drive: {error}", exc_info=True)
-        return None
-    except Exception as e:
-        logger.error(f"Erro inesperado ao fazer upload da foto para o Drive: {e}", exc_info=True)
-        return None
+# --- FUNÇÕES PRINCIPAIS DE EXPORTAÇÃO ---
 
 def export_data_to_drive():
     """
-    Exporta os dados das tabelas 'registros' e 'demandas' do PostgreSQL para arquivos Excel (XLSX) no Google Drive.
+    Exporta dados das tabelas 'registros', 'demandas' e 'ocorrencias_figuras_orgaos' para 
+    planilhas Excel em um único arquivo no Google Drive.
     """
     logger.info("Iniciando exportação de dados do PostgreSQL para arquivos Excel (XLSX) no Google Drive.")
-    conn = None
+    
+    drive_service = get_drive_service()
+    if not drive_service:
+        logger.error("Serviço do Google Drive não disponível, abortando exportação.")
+        return
+
+    conn = conectar_banco()
+    if conn is None:
+        logger.error("Não foi possível conectar ao banco de dados para exportação.")
+        return
+
+    excel_path = None # Inicializa para garantir que seja limpo no finally
+
     try:
-        service = get_drive_service()
-        folder_id_excel = GOOGLE_DRIVE_FOLDER_ID # Pasta principal para Excel
+        # Consultar dados da tabela 'registros'
+        df_registros = pd.read_sql("SELECT * FROM registros ORDER BY id DESC", conn)
+        logger.info(f"DataFrame 'registros' carregado. Linhas: {len(df_registros)}.")
 
-        conn = conectar_banco()
-        if conn is None:
-            logger.error("Não foi possível conectar ao banco de dados para exportar Excel.")
-            return
+        # Consultar dados da tabela 'demandas'
+        df_demandas = pd.read_sql("SELECT * FROM demandas ORDER BY id DESC", conn)
+        logger.info(f"DataFrame 'demandas' carregado. Linhas: {len(df_demandas)}.")
 
-        # --- Exportar tabela 'registros' para XLSX ---
-        df_registros = pd.read_sql("SELECT * FROM registros", conn)
-        _upload_or_update_excel(service, "registros.xlsx", df_registros, folder_id_excel) # Alterado para .xlsx
-        logger.info("Arquivo Excel 'registros.xlsx' exportado para o Google Drive.")
+        # Consultar dados da nova tabela 'ocorrencias_figuras_orgaos'
+        df_figuras_orgaos = pd.read_sql("SELECT * FROM ocorrencias_figuras_orgaos ORDER BY id DESC", conn)
+        logger.info(f"DataFrame 'ocorrencias_figuras_orgaos' carregado. Linhas: {len(df_figuras_orgaos)}.")
+        logger.debug(f"Conteúdo de df_figuras_orgaos (primeiras 5 linhas):\n{df_figuras_orgaos.head()}") 
 
-        # --- Exportar tabela 'demandas' para XLSX ---
-        df_demandas = pd.read_sql("SELECT * FROM demandas", conn)
-        _upload_or_update_excel(service, "demandas.xlsx", df_demandas, folder_id_excel) # Alterado para .xlsx
-        logger.info("Arquivo Excel 'demandas.xlsx' exportado para o Google Drive.")
-        
+        # Criar um arquivo Excel com múltiplas planilhas
+        excel_file_name = f"Dados_Ocorrencias_Bot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        excel_path = os.path.join("/tmp", excel_file_name) 
+
+        with pd.ExcelWriter(excel_path, engine='xlsxwriter') as writer:
+            if not df_registros.empty:
+                df_registros.to_excel(writer, sheet_name='Ocorrencias Principais', index=False)
+                logger.info("Planilha 'Ocorrencias Principais' adicionada ao Excel.")
+            else:
+                logger.warning("DataFrame de 'Ocorrencias Principais' vazio. Planilha não será criada ou estará vazia.")
+            
+            if not df_figuras_orgaos.empty:
+                df_figuras_orgaos.to_excel(writer, sheet_name='Figuras e Orgaos', index=False)
+                logger.info("Planilha 'Figuras e Orgaos' adicionada ao Excel.")
+            else:
+                logger.warning("DataFrame de 'Figuras e Orgaos' vazio. Planilha não será criada ou estará vazia.")
+
+            if not df_demandas.empty:
+                df_demandas.to_excel(writer, sheet_name='Demandas', index=False)
+                logger.info("Planilha 'Demandas' adicionada ao Excel.")
+            else:
+                logger.warning("DataFrame de 'Demandas' vazio. Planilha não será criada ou estará vazia.")
+
+        logger.info(f"Arquivo Excel temporário '{excel_file_name}' criado em {excel_path}.")
+
+        folder_id = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
+        if not folder_id:
+            raise ValueError("GOOGLE_DRIVE_FOLDER_ID não está configurada nas variáveis de ambiente.")
+
+        file_metadata = {
+            'name': excel_file_name,
+            'parents': [folder_id],
+            'mimeType': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        }
+        media = MediaFileUpload(excel_path, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', resumable=True)
+
+        file = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+        logger.info(f"Arquivo '{excel_file_name}' exportado para o Google Drive. ID: {file.get('id')}")
         logger.info("Exportação de arquivos Excel (XLSX) do PostgreSQL para o Drive concluída com sucesso.")
 
     except Exception as e:
-        logger.error(f"Erro durante a exportação de arquivos Excel (XLSX) do PostgreSQL para o Drive: {e}", exc_info=True)
-        raise
+        logger.error(f"Erro durante a exportação para o Google Drive: {e}", exc_info=True)
     finally:
         if conn:
-            conn.close() # Garante que a conexão com o banco seja fechada
+            conn.close()
+        # Limpa o arquivo temporário
+        if excel_path and os.path.exists(excel_path):
+            os.remove(excel_path)
+            logger.info(f"Arquivo temporário '{excel_path}' removido.")
 
+
+# --- FUNÇÃO AUXILIAR PARA UPLOAD DE FOTO ---
+
+async def upload_photo_to_drive(photo_bytes: bytes, filename: str):
+    """
+    Faz o upload de bytes de uma foto para o Google Drive.
+    Retorna o ID do arquivo no Drive ou None em caso de erro.
+    """
+    drive_service = get_drive_service()
+    if not drive_service:
+        return None
+
+    folder_id = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
+    if not folder_id:
+        logger.error("GOOGLE_DRIVE_FOLDER_ID não configurada para upload de foto.")
+        return None
+
+    temp_filepath = os.path.join("/tmp", filename)
+    try:
+        with open(temp_filepath, "wb") as f:
+            f.write(photo_bytes)
+
+        file_metadata = {
+            'name': filename,
+            'parents': [folder_id],
+            'mimeType': 'image/jpeg' 
+        }
+        media = MediaFileUpload(temp_filepath, mimetype='image/jpeg', resumable=True)
+
+        file = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+        return file.get('id')
+    except Exception as e:
+        logger.error(f"Erro ao fazer upload da foto para o Google Drive: {e}", exc_info=True)
+        return None
+    finally:
+        if os.path.exists(temp_filepath):
+            os.remove(temp_filepath)
