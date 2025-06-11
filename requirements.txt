@@ -1,11 +1,10 @@
-python-telegram-bot==20.6 # Use a versão que você já está usando, ex: 20.6
+python-telegram-bot
 fastapi
 uvicorn
 pandas
 psycopg2-binary
-openpyxl  # Para escrita de arquivos .xlsx pelo Pandas
-google-auth==2.* # Garante uma versão recente da autenticação do Google
-google-api-python-client==2.* # Garante uma versão recente da API do Google
-google-auth-httplib2==0.* # Essencial para a comunicação HTTP com as APIs do Google
-gspread # Se você estiver usando gspread em qualquer lugar (não diretamente no seu código atual, mas bom ter)
-python-dotenv # Para carregar variáveis de ambiente do .env
+openpyxl
+google-auth
+google-api-python-client
+google-auth-httplib2
+python-dotenv
