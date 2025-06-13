@@ -249,3 +249,11 @@ if __name__ == "__main__":
     logger.info(f"Running Uvicorn directly via __main__ on port: {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
 
+@app.get("/ping")
+async def ping_endpoint():
+    """
+    Endpoint simples para monitoramento de disponibilidade.
+    Apenas retorna um status "OK" para indicar que o serviço está ativo.
+    """
+    logger.info("Requisição GET recebida no endpoint /ping. Bot está ativo.")
+    return {"status": "OK", "message": "Bot is alive!"}
