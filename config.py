@@ -11,7 +11,7 @@ FOTO_PATH = os.path.join(CAMINHO_BASE, "fotos")
 CSV_ASSUNTOS = os.path.join(CAMINHO_BASE, "listas", "assuntos.csv")
 CSV_REGISTRO = os.path.join(CAMINHO_BASE, "data", "registros.csv")
 PAGINACAO_TAMANHO = 5
-COLABORADORES = ["Orlando", "Derielle", "Ricardo", "Vania", "Danillo"]
+COLABORADORES = ["Orlando Sena Campos Junior", "Derielle Valeriotte Alvarenga", "Ricardo Augusto Sepulveda Filho", "Vania Caldeira De Azevedo Xible", "Danilo Candido De Sa Comarella"]
 
 def escrever_permissao(path):
         if not os.path.exists(path):
