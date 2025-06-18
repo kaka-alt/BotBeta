@@ -85,7 +85,7 @@ async def tipo_visita_escolha(update: Update, context: ContextTypes.DEFAULT_TYPE
     data = query.data
 
     tipo_visita = data.replace("tipo_visita_", "") 
-    context.user_data['tipo_visita'] = tipo_visita.capitalize() 
+    context.user_data['tipo_visita'] = tipo_visita.upper() 
 
     await query.message.edit_text(f"✅ Tipo de visita selecionado: <b>{tipo_visita.capitalize()}</b>.", parse_mode=ParseMode.HTML)
     # NOVO FLUXO: Após o tipo de visita, pergunta se quer adicionar figura pública/órgão
