@@ -399,8 +399,8 @@ async def data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return DATA_MANUAL
 
 
- --- Etapa: Foto da Ocorrência (DESATIVADA TEMPORARIAMENTE) ---
- async def foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+ #--- Etapa: Foto da Ocorrência (DESATIVADA TEMPORARIAMENTE) ---
+async def foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
      if not update.message.photo:
          await update.message.reply_text("❗ Isso não parece uma foto. Por favor, envie uma <b>foto válida</b> da ocorrência.", parse_mode=ParseMode.HTML)
          return FOTO
