@@ -123,6 +123,7 @@ def conectar_banco():
         return None
 
 def salvar_no_banco(data: dict):
+    logger.info(f"Recebido para salvar: {data}")
     conn = conectar_banco()
     if conn is None:
         logger.error("Não foi possível conectar ao banco.")
@@ -133,12 +134,13 @@ def salvar_no_banco(data: dict):
 
         data_registro = datetime.strptime(data['data'], '%Y-%m-%d').date()
 
-        # Pega a lista de órgãos públicos dentro do dicionário
         figuras_orgaos = data.get("figuras_orgaos", [])
+        logger.info(f"figuras_orgaos: {figuras_orgaos}")
 
         if figuras_orgaos:
-            # Pega o órgão público do primeiro item da lista
-            categoria = figuras_orgaos[0].get("orgao_publico", "NÃO INFORMADO")
+            logger.info(f"Chaves no primeiro item: {list(figuras_orgaos[0].keys())}")
+            categoria = figuras_orgaos[0].get("orgao_publico")
+            logger.info(f"Categoria extraída: {categoria}")
         else:
             categoria = "NÃO INFORMADO"
             logger.warning("Campo 'figuras_orgaos' vazio ou ausente. Categoria setada como 'NÃO INFORMADO'.")
