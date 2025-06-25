@@ -179,85 +179,91 @@ def get_drive_service():
         logger.error(f"Erro ao obter serviço do Google Drive: {e}", exc_info=True)
         return None
 
+from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
+from io import BytesIO
+
 def export_data_to_drive():
-    """
-    Exporta dados das tabelas 'registros', 'demandas' e 'ocorrencias_figuras_orgaos' para 
-    planilhas Excel no Google Drive.
-    """
-    logger.info("Iniciando exportação de dados para o Google Drive...")
-    drive_service = get_drive_service()
-    if not drive_service:
-        logger.error("Serviço do Google Drive não disponível, abortando exportação.")
+    logger.info("Iniciando exportação incremental para planilha 'REUNIAO_PP.xlsx'")
+    service = get_drive_service()
+    if not service:
+        logger.error("Serviço do Google Drive não disponível.")
         return
 
-    conn = conectar_banco()
-    if conn is None:
-        logger.error("Não foi possível conectar ao banco de dados para exportação.")
-        return
-
-    excel_path = None 
+    folder_id = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
+    spreadsheet_name = "REUNIAO_PP.xlsx"
 
     try:
-        # Consultar dados da tabela 'registros'
-        df_registros = pd.read_sql("SELECT * FROM registros ORDER BY id DESC", conn)
-        logger.info(f"DataFrame 'registros' carregado. Linhas: {len(df_registros)}.")
+        # 1. Buscar o arquivo no Google Drive
+        query = f"name='{spreadsheet_name}' and '{folder_id}' in parents and trashed=false"
+        results = service.files().list(q=query, fields="files(id, name)").execute()
+        files = results.get("files", [])
+        if not files:
+            raise FileNotFoundError(f"Arquivo '{spreadsheet_name}' não encontrado na pasta do Drive.")
 
-        # Consultar dados da tabela 'demandas'
-        df_demandas = pd.read_sql("SELECT * FROM demandas ORDER BY id DESC", conn)
-        logger.info(f"DataFrame 'demandas' carregado. Linhas: {len(df_demandas)}.")
+        file_id = files[0]["id"]
+        logger.info(f"Arquivo encontrado no Drive com ID: {file_id}")
 
-        # Consultar dados da nova tabela 'ocorrencias_figuras_orgaos'
-        df_figuras_orgaos = pd.read_sql("SELECT * FROM ocorrencias_figuras_orgaos ORDER BY id DESC", conn)
-        logger.info(f"DataFrame 'ocorrencias_figuras_orgaos' carregado. Linhas: {len(df_figuras_orgaos)}.")
-        logger.debug(f"Conteúdo de df_figuras_orgaos:\n{df_figuras_orgaos.head()}") # Mostrar as primeiras linhas para debug
+        # 2. Baixar conteúdo da planilha
+        request = service.files().get_media(fileId=file_id)
+        fh = BytesIO()
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+        fh.seek(0)
 
-        # Criar um arquivo Excel com múltiplas planilhas
-        excel_file_name = f"Dados_Ocorrencias_Bot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        excel_path = os.path.join("/tmp", excel_file_name) 
+        df_existente = pd.read_excel(fh, engine='openpyxl')
+        logger.info(f"Planilha atual carregada. Linhas existentes: {len(df_existente)}")
 
-        with pd.ExcelWriter(excel_path, engine='xlsxwriter') as writer:
-            if not df_registros.empty:
-                df_registros.to_excel(writer, sheet_name='Ocorrencias Principais', index=False)
-                logger.info("Planilha 'Ocorrencias Principais' adicionada ao Excel.")
-            else:
-                logger.warning("DataFrame de 'Ocorrencias Principais' vazio. Planilha não será criada ou estará vazia.")
-            
-            if not df_figuras_orgaos.empty:
-                df_figuras_orgaos.to_excel(writer, sheet_name='Figuras e Orgaos', index=False)
-                logger.info("Planilha 'Figuras e Orgaos' adicionada ao Excel.")
-            else:
-                logger.warning("DataFrame de 'Figuras e Orgaos' vazio. Planilha não será criada ou estará vazia.")
+        # 3. Ler novos dados do banco
+        conn = conectar_banco()
+        if conn is None:
+            raise Exception("Falha ao conectar ao banco.")
+        df_novo = pd.read_sql("SELECT * FROM planilha_registros ORDER BY id ASC", conn)
+        logger.info(f"Novos registros lidos do banco: {len(df_novo)}")
 
-            if not df_demandas.empty:
-                df_demandas.to_excel(writer, sheet_name='Demandas', index=False)
-                logger.info("Planilha 'Demandas' adicionada ao Excel.")
-            else:
-                logger.warning("DataFrame de 'Demandas' vazio. Planilha não será criada ou estará vazia.")
+        # 4. Padronizar colunas e criar df_formatado
+        df_novo.columns = [col.upper().strip() for col in df_novo.columns]
+        df_formatado = pd.DataFrame()
 
-        logger.info(f"Arquivo Excel temporário '{excel_file_name}' criado em {excel_path}.")
+        df_formatado["DATA"] = df_novo["DATA"]
+        df_formatado["CATEGORIA"] = df_novo["CATEGORIA"]
+        df_formatado["PARTICIPANTE"] = df_novo["CATEGORIA"] + " - " + df_novo["MUNICIPIO"]
+        df_formatado["CLIENTE"] = df_novo["CLIENTE"]
+        df_formatado["ASSUNTO"] = df_novo["ASSUNTO"]
+        df_formatado["TIPO ATENDIMENTO"] = df_novo["TIPO_ATENDIMENTO"]
+        df_formatado["MUNICIPIO"] = df_novo["MUNICIPIO"]
+        df_formatado["COLABORADOR"] = df_novo["COLABORADOR"]
+        df_formatado["Item Type"] = ""  # Valor vazio
+        df_formatado["Path"] = ""       # Valor vazio
+        df_formatado["ATENDIMENTO"] = df_novo["ATENDIMENTO"]
 
-        folder_id = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
-        if not folder_id:
-            raise ValueError("GOOGLE_DRIVE_FOLDER_ID não está configurada nas variáveis de ambiente.")
+        logger.info("Pré-visualização dos dados novos formatados:")
+        logger.info(df_formatado.head())
 
-        file_metadata = {
-            'name': excel_file_name,
-            'parents': [folder_id],
-            'mimeType': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        }
-        media = MediaFileUpload(excel_path, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', resumable=True)
+        # 5. Concatenar com dados existentes
+        df_final = pd.concat([df_existente, df_formatado], ignore_index=True)
+        logger.info(f"Total final de linhas na planilha: {len(df_final)}")
 
-        file = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-        logger.info(f"Arquivo '{excel_file_name}' exportado para o Google Drive. ID: {file.get('id')}")
+        # 6. Salvar e atualizar no Drive
+        excel_buffer = BytesIO()
+        df_final.to_excel(excel_buffer, index=False, engine='openpyxl')
+        excel_buffer.seek(0)
+
+        media_body = MediaIoBaseUpload(excel_buffer,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            resumable=True
+        )
+
+        service.files().update(fileId=file_id, media_body=media_body).execute()
+        logger.info(f"Planilha '{spreadsheet_name}' atualizada com sucesso no Drive.")
 
     except Exception as e:
-        logger.error(f"Erro durante a exportação para o Google Drive: {e}", exc_info=True)
+        logger.error(f"Erro ao exportar dados para planilha do Drive: {e}", exc_info=True)
     finally:
         if conn:
             conn.close()
-        if excel_path and os.path.exists(excel_path):
-            os.remove(excel_path)
-            logger.info(f"Arquivo temporário '{excel_path}' removido.")
+
 
 # Função auxiliar para upload de foto (usada por handlers.py)
 async def upload_photo_to_drive(photo_bytes: bytes, filename: str):
