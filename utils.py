@@ -123,7 +123,6 @@ def conectar_banco():
         return None
 
 def salvar_no_banco(data: dict):
-    logger.info(f"Recebido para salvar: {data}")
     conn = conectar_banco()
     if conn is None:
         logger.error("Não foi possível conectar ao banco.")
@@ -134,24 +133,21 @@ def salvar_no_banco(data: dict):
 
         data_registro = datetime.strptime(data['data'], '%Y-%m-%d').date()
 
-        figuras_orgaos = data.get("figuras_orgaos", [])
-        logger.info(f"figuras_orgaos: {figuras_orgaos}")
-
+        figuras_orgaos = data.get('figuras_orgaos', [])
         if figuras_orgaos:
-            logger.info(f"Chaves no primeiro item: {list(figuras_orgaos[0].keys())}")
-            categoria = figuras_orgaos[0].get("orgao_publico")
-            logger.info(f"Categoria extraída: {categoria}")
+            categoria = figuras_orgaos[0].get('orgao_publico', "NÃO INFORMADO")
         else:
             categoria = "NÃO INFORMADO"
-            logger.warning("Campo 'figuras_orgaos' vazio ou ausente. Categoria setada como 'NÃO INFORMADO'.")
 
-        participante = f"{categoria} - {data.get('municipio', '')}"
-        cliente = f"{data.get('figura_publica', '')} - {data.get('cargo', '')}"
-        assunto = data.get('assunto', '')
-        tipo_atendimento = data.get('tipo_atendimento', '')
-        municipio = data.get('municipio', '')
-        colaborador = data.get('colaborador', '')
-        atendimento = data.get('tipo_visita', None)
+        participante = f"{categoria} - {data.get('municipio', 'N/A')}"
+        cliente = ""
+        if figuras_orgaos:
+            cliente = f"{figuras_orgaos[0].get('figura_publica', 'N/A')} - {figuras_orgaos[0].get('cargo', 'N/A')}"
+        assunto = data.get('assunto', 'NÃO INFORMADO')
+        tipo_atendimento = data.get('tipo_atendimento')
+        municipio = data.get('municipio')
+        colaborador = data.get('colaborador')
+        atendimento = data.get('tipo_visita')
 
         cursor.execute("""
             INSERT INTO planilha_registros (
