@@ -96,44 +96,68 @@ def _download_file_content(service, file_id: str) -> str:
 # --- FUNÇÃO ATUALIZADA PARA UPLOAD DE EXCEL (XLSX) ---
 def _upload_or_update_excel(service, filename: str, df: pd.DataFrame, folder_id: str = None):
     """
-    Cria um novo arquivo XLSX no Google Drive ou sobrescreve um existente
-    com o conteúdo do DataFrame fornecido.
+    Atualiza ou cria planilha no Drive. Adiciona dados do banco aos dados existentes
+    respeitando as colunas fixas da planilha.
     """
     file_id = _get_file_id_by_name(service, filename, folder_id)
-    
-    # Salva o DataFrame em um buffer de bytes no formato XLSX
+
+    # Define a ordem correta das colunas e preenche as que faltam
+    colunas_padrao = [
+        "DATA", "CATEGORIA", "PARTICIPANTE", "CLIENTE", "ASSUNTO", "TIPO ATENDIMENTO",
+        "MUNICIPIO", "COLABORADOR", "Item Type", "Path", "ATENDIMENTO"
+    ]
+
+    # 1. Ajusta o DataFrame novo para seguir o padrão
+    df["Item Type"] = ""
+    df["Path"] = ""
+    for col in colunas_padrao:
+        if col not in df.columns:
+            df[col] = ""
+
+    df = df[colunas_padrao]  # Reordena
+
+    # 2. Tenta baixar o conteúdo do arquivo atual (se existir)
+    if file_id:
+        try:
+            request = service.files().get_media(fileId=file_id)
+            buffer = BytesIO()
+            request.execute(fd=buffer)
+            buffer.seek(0)
+            df_existente = pd.read_excel(buffer, engine='openpyxl')
+            logger.info(f"Arquivo existente lido com {len(df_existente)} registros.")
+        except Exception as e:
+            logger.warning(f"Erro ao ler planilha existente, será sobrescrita. Erro: {e}")
+            df_existente = pd.DataFrame(columns=colunas_padrao)
+    else:
+        df_existente = pd.DataFrame(columns=colunas_padrao)
+
+    # 3. Junta os dados sem duplicar (com base nas colunas principais)
+    df_final = pd.concat([df_existente, df], ignore_index=True).drop_duplicates(subset=[
+        "DATA", "CATEGORIA", "PARTICIPANTE", "CLIENTE", "ASSUNTO", "TIPO ATENDIMENTO", "MUNICIPIO", "COLABORADOR"
+    ])
+
+    # 4. Salva no buffer
     excel_buffer = BytesIO()
-    df.to_excel(excel_buffer, index=False, engine='openpyxl')
-    excel_buffer.seek(0) # Volta para o início do buffer
-    
+    df_final.to_excel(excel_buffer, index=False, engine='openpyxl')
+    excel_buffer.seek(0)
+
     media_body = MediaIoBaseUpload(excel_buffer,
                                    mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                                    resumable=True)
 
-    if file_id:
-        try:
+    try:
+        if file_id:
             service.files().update(fileId=file_id, media_body=media_body).execute()
-            logger.info(f"Arquivo Excel '{filename}' atualizado no Google Drive (ID: {file_id}).")
-        except HttpError as error:
-            logger.error(f"Erro ao atualizar arquivo Excel '{filename}' (ID: {file_id}): {error}")
-            raise
-        except Exception as e:
-            logger.error(f"Erro inesperado ao atualizar arquivo Excel '{filename}' (ID: {file_id}): {e}", exc_info=True)
-            raise
-    else:
-        file_metadata = {'name': filename, 'mimeType': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}
-        if folder_id:
-            file_metadata['parents'] = [folder_id]
-        try:
+            logger.info(f"Planilha '{filename}' atualizada com {len(df_final)} registros.")
+        else:
+            file_metadata = {'name': filename, 'mimeType': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}
+            if folder_id:
+                file_metadata['parents'] = [folder_id]
             file = service.files().create(body=file_metadata, media_body=media_body, fields='id').execute()
-            logger.info(f"Arquivo Excel '{filename}' criado no Google Drive com ID: '{file.get('id')}'")
-        except HttpError as error:
-            logger.error(f"Erro ao criar arquivo Excel '{filename}': {error}")
-            raise
-        except Exception as e:
-            logger.error(f"Erro inesperado ao criar arquivo Excel '{filename}': {e}", exc_info=True)
-            raise
-
+            logger.info(f"Nova planilha '{filename}' criada com {len(df_final)} registros.")
+    except Exception as e:
+        logger.error(f"Erro ao salvar a planilha '{filename}': {e}", exc_info=True)
+        raise
 async def upload_photo_to_drive(file_bytes: bytes, filename: str) -> str | None:
     """
     Faz o upload de uma foto para o Google Drive na pasta de fotos específica.
