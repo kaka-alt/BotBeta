@@ -133,18 +133,23 @@ def salvar_no_banco(data: dict):
 
         data_registro = datetime.strptime(data['data'], '%Y-%m-%d').date()
 
-        categoria = data.get('orgao_publico')
-        if not categoria:
-            logger.warning("Campo 'orgao_publico' está vazio! Preenchendo como 'NÃO INFORMADO'.")
-            categoria = "NÃO INFORMADO"
+        # Pega a lista de órgãos públicos dentro do dicionário
+        figuras_orgaos = data.get("figuras_orgaos", [])
 
-        participante = f"{data.get('orgao_publico')} - {data.get('municipio')}"
-        cliente = f"{data.get('figura_publica')} - {data.get('cargo')}"
-        assunto = data.get('assunto')
-        tipo_atendimento = data.get('tipo_atendimento')
-        municipio = data.get('municipio')
-        colaborador = data.get('colaborador')
-        atendimento = data.get('tipo_visita')
+        if figuras_orgaos:
+            # Pega o órgão público do primeiro item da lista
+            categoria = figuras_orgaos[0].get("orgao_publico", "NÃO INFORMADO")
+        else:
+            categoria = "NÃO INFORMADO"
+            logger.warning("Campo 'figuras_orgaos' vazio ou ausente. Categoria setada como 'NÃO INFORMADO'.")
+
+        participante = f"{categoria} - {data.get('municipio', '')}"
+        cliente = f"{data.get('figura_publica', '')} - {data.get('cargo', '')}"
+        assunto = data.get('assunto', '')
+        tipo_atendimento = data.get('tipo_atendimento', '')
+        municipio = data.get('municipio', '')
+        colaborador = data.get('colaborador', '')
+        atendimento = data.get('tipo_visita', None)
 
         cursor.execute("""
             INSERT INTO planilha_registros (
@@ -164,6 +169,7 @@ def salvar_no_banco(data: dict):
     finally:
         cursor.close()
         conn.close()
+
 
 # --- FUNÇÕES PARA GOOGLE DRIVE ---
 def get_drive_service():
