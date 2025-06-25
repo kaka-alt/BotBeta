@@ -177,37 +177,21 @@ def export_data_to_drive():
     Exporta os dados das tabelas 'registros', 'demandas' e 'ocorrencias_figuras_orgaos' 
     do PostgreSQL para arquivos Excel (XLSX) no Google Drive.
     """
-    logger.info("Iniciando exportação de dados do PostgreSQL para arquivos Excel (XLSX) no Google Drive.")
-    conn = None
     try:
         service = get_drive_service()
-        folder_id_excel = GOOGLE_DRIVE_FOLDER_ID # Pasta principal para Excel
+        folder_id = GOOGLE_DRIVE_FOLDER_ID  # já configurado
 
         conn = conectar_banco()
         if conn is None:
-            logger.error("Não foi possível conectar ao banco de dados para exportar Excel.")
             return
 
-        # --- Exportar tabela 'registros' para XLSX ---
-        df_registros = pd.read_sql("SELECT * FROM registros", conn)
-        _upload_or_update_excel(service, "registros.xlsx", df_registros, folder_id_excel)
-        logger.info("Arquivo Excel 'registros.xlsx' exportado para o Google Drive.")
+        df = pd.read_sql("SELECT * FROM planilha_registros ORDER BY id DESC", conn)
+        logger.info(f"Lendo {len(df)} registros da nova tabela.")
 
-        # --- Exportar tabela 'demandas' para XLSX ---
-        df_demandas = pd.read_sql("SELECT * FROM demandas", conn)
-        _upload_or_update_excel(service, "demandas.xlsx", df_demandas, folder_id_excel)
-        logger.info("Arquivo Excel 'demandas.xlsx' exportado para o Google Drive.")
-        
-        # --- NOVO: Exportar tabela 'ocorrencias_figuras_orgaos' para XLSX ---
-        df_figuras_orgaos = pd.read_sql("SELECT * FROM ocorrencias_figuras_orgaos", conn)
-        _upload_or_update_excel(service, "ocorrencias_figuras_publicas.xlsx", df_figuras_orgaos, folder_id_excel)
-        logger.info("Arquivo Excel 'ocorrencias_figuras_publicas.xlsx' exportado para o Google Drive.")
-        
-        logger.info("Exportação de arquivos Excel (XLSX) do PostgreSQL para o Drive concluída com sucesso.")
+        _upload_or_update_excel(service, "REUNIÕES PP.xlsx", df, folder_id)
 
     except Exception as e:
-        logger.error(f"Erro durante a exportação de arquivos Excel (XLSX) do PostgreSQL para o Drive: {e}", exc_info=True)
-        raise
+        logger.error(f"Erro ao exportar planilha_registros para Excel: {e}", exc_info=True)
     finally:
         if conn:
-            conn.close() # Garante que a conexão com o banco seja fechada
+            conn.close()  # Garante que a conexão com o banco seja fechada

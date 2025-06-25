@@ -379,8 +379,8 @@ async def data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             dt = datetime.strptime(texto, "%Y/%m/%d")
             context.user_data['data'] = dt.strftime("%Y-%m-%d")
             await update.message.reply_text(f"✅ Data registrada: <b>{dt.strftime('%Y/%m/%d')}</b>.", parse_mode=ParseMode.HTML)
-            await update.message.reply_text("📷 Perfeito! Agora, por favor, envie a <b>foto</b> da ocorrência:", parse_mode=ParseMode.HTML)
-            return FOTO 
+            await update.message.reply_text("📝 Quer adicionar uma <b>demanda</b> relacionada a esta ocorrência?", parse_mode=ParseMode.HTML)
+            return DEMANDA_ESCOLHA 
         except ValueError:
             await update.message.reply_text("❗ Formato inválido. Por favor, digite a data no formato <b>AAAA/MM/DD</b> (ex: 2025/06/04):", parse_mode=ParseMode.HTML)
             return DATA_MANUAL 
@@ -390,7 +390,7 @@ async def data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.photo:
         await update.message.reply_text("❗ Isso não parece uma foto. Por favor, envie uma <b>foto válida</b> da ocorrência.", parse_mode=ParseMode.HTML)
-        return FOTO 
+        return FOTO
 
     photo = update.message.photo[-1] 
     telegram_file = await context.bot.get_file(photo.file_id) 

@@ -124,78 +124,43 @@ def conectar_banco():
 
 def salvar_no_banco(data: dict):
     """Salva os dados no banco de dados PostgreSQL, incluindo múltiplas figuras/órgãos."""
-
-    conn = conectar_banco() 
+    conn = conectar_banco()
     if conn is None:
-        logger.error("Não foi possível conectar ao banco de dados para salvar a ocorrência.")
-        return 
-
-    cursor = conn.cursor() 
+        logger.error("Não foi possível conectar ao banco.")
+        return
 
     try:
-        data_str = data.get('data')
-        data_date = datetime.strptime(data_str, '%Y-%m-%d').date() if isinstance(data_str, str) else data_str
+        cursor = conn.cursor()
+
+        # Construir os campos com base no que o bot envia
+        data_registro = datetime.strptime(data['data'], '%Y-%m-%d').date()
+        categoria = data.get('orgao_publico')
+        participante = f"{data.get('orgao_publico')} - {data.get('municipio')}"
+        cliente = f"{data.get('figura_publica')} - {data.get('cargo')}"
+        assunto = data.get('assunto')
+        tipo_atendimento = data.get('tipo_atendimento')  # novo handler deve alimentar isso
+        municipio = data.get('municipio')
+        colaborador = data.get('colaborador')
+        atendimento = data.get('tipo_visita')  # pode vir como None
 
         cursor.execute("""
-            INSERT INTO registros (
-                colaborador, tipo_visita, assunto, municipio, data, foto
-            ) VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING id; 
+            INSERT INTO planilha_registros (
+                data, categoria, participante, cliente, assunto, tipo_atendimento, municipio, colaborador, atendimento
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
-            data.get('colaborador'), data.get('tipo_visita'),
-            data.get('assunto'), data.get('municipio'),
-            data_date, 
-            data.get('foto')
+            data_registro, categoria, participante, cliente,
+            assunto, tipo_atendimento, municipio, colaborador, atendimento
         ))
-        registro_id = cursor.fetchone()[0] 
-        logger.info(f"Ocorrência principal salva. Registro ID: {registro_id}")
 
-        figuras_orgaos = data.get('figuras_orgaos', [])
-        if figuras_orgaos:
-            for fo_set in figuras_orgaos:
-                cursor.execute("""
-                    INSERT INTO ocorrencias_figuras_orgaos (
-                        registro_id, orgao_publico, figura_publica, cargo
-                    ) VALUES (%s, %s, %s, %s)
-                """, (
-                    registro_id, 
-                    fo_set.get('orgao_publico'),
-                    fo_set.get('figura_publica'),
-                    fo_set.get('cargo')
-                ))
-            logger.info(f"{len(figuras_orgaos)} figuras/órgãos salvos para o Registro ID: {registro_id}")
-        else:
-            logger.info(f"Nenhuma figura/órgão para salvar para o Registro ID: {registro_id}")
+        conn.commit()
+        logger.info("Registro salvo com sucesso na tabela planilha_registros.")
 
-
-        demandas = data.get('demandas', [])
-        if demandas:
-            for demanda in demandas:
-                cursor.execute("""
-                    INSERT INTO demandas (
-                        registro_id, texto, ov, pro, observacao
-                    ) VALUES (%s, %s, %s, %s, %s)
-                """, (
-                    registro_id, 
-                    demanda.get('texto'), demanda.get('ov'),
-                    demanda.get('pro'), demanda.get('observacao')
-                ))
-            logger.info(f"{len(demandas)} demandas salvas para o Registro ID: {registro_id}")
-        else:
-            logger.info(f"Nenhuma demanda para salvar para o Registro ID: {registro_id}")
-
-        conn.commit() 
-        logger.info(f"Transação para o Registro ID: {registro_id} concluída no PostgreSQL!")
-
-    except psycopg2.Error as e:
-        conn.rollback() 
-        logger.error(f"Erro ao salvar no banco de dados para o Registro ID: {registro_id}. Detalhes: {e}", exc_info=True)
     except Exception as e:
         conn.rollback()
-        logger.error(f"Erro inesperado ao salvar no banco de dados para o Registro ID: {registro_id}. Detalhes: {e}", exc_info=True)
+        logger.error(f"Erro ao salvar na tabela planilha_registros: {e}", exc_info=True)
     finally:
-        cursor.close() 
-        conn.close() 
+        cursor.close()
+        conn.close()
 
 # --- FUNÇÕES PARA GOOGLE DRIVE ---
 def get_drive_service():
