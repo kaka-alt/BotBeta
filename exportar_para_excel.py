@@ -94,29 +94,25 @@ def _download_file_content(service, file_id: str) -> str:
         raise
 
 # --- FUNÇÃO ATUALIZADA PARA UPLOAD DE EXCEL (XLSX) ---
-def _upload_or_update_excel(service, filename: str, df: pd.DataFrame, folder_id: str = None):
+def _upload_or_update_excel(service, filename: str, df_novo: pd.DataFrame, folder_id: str = None):
     """
-    Atualiza ou cria planilha no Drive. Adiciona dados do banco aos dados existentes
-    respeitando as colunas fixas da planilha.
+    Lê a planilha existente no Drive, adiciona novos dados e salva novamente no mesmo arquivo.
     """
     file_id = _get_file_id_by_name(service, filename, folder_id)
-
-    # Define a ordem correta das colunas e preenche as que faltam
     colunas_padrao = [
         "DATA", "CATEGORIA", "PARTICIPANTE", "CLIENTE", "ASSUNTO", "TIPO ATENDIMENTO",
         "MUNICIPIO", "COLABORADOR", "Item Type", "Path", "ATENDIMENTO"
     ]
 
-    # 1. Ajusta o DataFrame novo para seguir o padrão
-    df["Item Type"] = ""
-    df["Path"] = ""
+    # Preenche campos ausentes no df_novo
     for col in colunas_padrao:
-        if col not in df.columns:
-            df[col] = ""
+        if col not in df_novo.columns:
+            df_novo[col] = ""
+    df_novo = df_novo[colunas_padrao]  # Reordena as colunas
 
-    df = df[colunas_padrao]  # Reordena
+    df_existente = pd.DataFrame(columns=colunas_padrao)
 
-    # 2. Tenta baixar o conteúdo do arquivo atual (se existir)
+    # Baixa e lê o conteúdo da planilha existente
     if file_id:
         try:
             request = service.files().get_media(fileId=file_id)
@@ -126,17 +122,12 @@ def _upload_or_update_excel(service, filename: str, df: pd.DataFrame, folder_id:
             df_existente = pd.read_excel(buffer, engine='openpyxl')
             logger.info(f"Arquivo existente lido com {len(df_existente)} registros.")
         except Exception as e:
-            logger.warning(f"Erro ao ler planilha existente, será sobrescrita. Erro: {e}")
-            df_existente = pd.DataFrame(columns=colunas_padrao)
-    else:
-        df_existente = pd.DataFrame(columns=colunas_padrao)
+            logger.warning(f"Não foi possível ler o Excel existente, será criado novo. Erro: {e}")
 
-    # 3. Junta os dados sem duplicar (com base nas colunas principais)
-    df_final = pd.concat([df_existente, df], ignore_index=True).drop_duplicates(subset=[
-        "DATA", "CATEGORIA", "PARTICIPANTE", "CLIENTE", "ASSUNTO", "TIPO ATENDIMENTO", "MUNICIPIO", "COLABORADOR"
-    ])
+    # Junta os dados antigos com os novos
+    df_final = pd.concat([df_existente, df_novo], ignore_index=True)
 
-    # 4. Salva no buffer
+    # Salva o novo conteúdo
     excel_buffer = BytesIO()
     df_final.to_excel(excel_buffer, index=False, engine='openpyxl')
     excel_buffer.seek(0)
@@ -148,16 +139,17 @@ def _upload_or_update_excel(service, filename: str, df: pd.DataFrame, folder_id:
     try:
         if file_id:
             service.files().update(fileId=file_id, media_body=media_body).execute()
-            logger.info(f"Planilha '{filename}' atualizada com {len(df_final)} registros.")
+            logger.info(f"Arquivo '{filename}' atualizado com {len(df_final)} registros.")
         else:
             file_metadata = {'name': filename, 'mimeType': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}
             if folder_id:
                 file_metadata['parents'] = [folder_id]
             file = service.files().create(body=file_metadata, media_body=media_body, fields='id').execute()
-            logger.info(f"Nova planilha '{filename}' criada com {len(df_final)} registros.")
+            logger.info(f"Arquivo '{filename}' criado com {len(df_final)} registros.")
     except Exception as e:
-        logger.error(f"Erro ao salvar a planilha '{filename}': {e}", exc_info=True)
+        logger.error(f"Erro ao atualizar ou criar o Excel '{filename}': {e}", exc_info=True)
         raise
+
 async def upload_photo_to_drive(file_bytes: bytes, filename: str) -> str | None:
     """
     Faz o upload de uma foto para o Google Drive na pasta de fotos específica.
