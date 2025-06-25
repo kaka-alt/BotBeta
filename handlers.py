@@ -366,8 +366,8 @@ async def data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             dt = datetime.now()
             context.user_data['data'] = dt.strftime("%Y-%m-%d") 
             await query.message.edit_text(f"✅ Data registrada: <b>{dt.strftime('%Y/%m/%d %H:%M')}</b>.", parse_mode=ParseMode.HTML) 
-            await query.message.reply_text("📷 Perfeito! Agora, por favor, envie a <b>foto</b> da ocorrência:", parse_mode=ParseMode.HTML)
-            return FOTO 
+            await query.message.reply_text("📝 Quer adicionar uma <b>demanda</b> relacionada a esta ocorrência?", parse_mode=ParseMode.HTML)
+            return DEMANDA_ESCOLHA
 
         elif query.data == "data_manual":
             await query.message.edit_text("✍️ Entendido. Por favor, digite a data no formato <b>AAAA/MM/DD</b> (ex: 2025/06/04):", parse_mode=ParseMode.HTML)
