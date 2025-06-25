@@ -6,6 +6,7 @@ from datetime import datetime
 from io import BytesIO
 import pickle
 from googleapiclient.discovery import build
+import base64
 
 # Importação CORRETA para credenciais de conta de serviço
 from google.oauth2.service_account import Credentials 
@@ -38,12 +39,18 @@ if not GOOGLE_DRIVE_PHOTOS_FOLDER_ID:
 
 def get_drive_service():
     try:
-        with open('token.pickle', 'rb') as token:
-            creds = pickle.load(token)
+        token_b64 = os.environ.get('TOKEN_PICKLE_B64')
+        if not token_b64:
+            raise ValueError("Variável de ambiente TOKEN_PICKLE_B64 não configurada.")
+
+        token_bytes = base64.b64decode(token_b64)
+        creds = pickle.loads(token_bytes)
+
         service = build('drive', 'v3', credentials=creds)
+        logger.info("Serviço do Google Drive autenticado via variável ambiente TOKEN_PICKLE_B64.")
         return service
     except Exception as e:
-        logger.error(f"Erro ao carregar credenciais do token.pickle: {e}")
+        logger.error(f"Erro ao carregar credenciais do token via variável ambiente: {e}", exc_info=True)
         raise
 
 
@@ -163,13 +170,10 @@ async def upload_photo_to_drive(file_bytes: bytes, filename: str) -> str | None:
         return None
 
 def export_data_to_drive():
-    """
-    Exporta os dados das tabelas 'registros', 'demandas' e 'ocorrencias_figuras_orgaos' 
-    do PostgreSQL para arquivos Excel (XLSX) no Google Drive.
-    """
+    conn = None  # Inicializa com None
     try:
         service = get_drive_service()
-        folder_id = GOOGLE_DRIVE_FOLDER_ID  # já configurado
+        folder_id = GOOGLE_DRIVE_FOLDER_ID
 
         conn = conectar_banco()
         if conn is None:
@@ -184,4 +188,4 @@ def export_data_to_drive():
         logger.error(f"Erro ao exportar planilha_registros para Excel: {e}", exc_info=True)
     finally:
         if conn:
-            conn.close()  # Garante que a conexão com o banco seja fechada
+            conn.close()
