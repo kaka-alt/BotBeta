@@ -182,7 +182,7 @@ def export_data_to_drive():
         df = pd.read_sql("SELECT * FROM planilha_registros ORDER BY id DESC", conn)
         logger.info(f"Lendo {len(df)} registros da nova tabela.")
 
-        _upload_or_update_excel(service, "REUNIÕES PP.xlsx", df, folder_id)
+        _upload_or_update_excel(service, "REUNIAO_PP.xlsx", df, folder_id)
 
     except Exception as e:
         logger.error(f"Erro ao exportar planilha_registros para Excel: {e}", exc_info=True)
