@@ -138,7 +138,7 @@ def salvar_no_banco(data: dict):
             logger.warning("Campo 'orgao_publico' está vazio! Preenchendo como 'NÃO INFORMADO'.")
             categoria = "NÃO INFORMADO"
 
-        participante = f"{categoria} - {data.get('municipio')}"
+        participante = f"{data.get('orgao_publico')} - {data.get('municipio')}"
         cliente = f"{data.get('figura_publica')} - {data.get('cargo')}"
         assunto = data.get('assunto')
         tipo_atendimento = data.get('tipo_atendimento')
