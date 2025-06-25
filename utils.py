@@ -123,7 +123,6 @@ def conectar_banco():
         return None
 
 def salvar_no_banco(data: dict):
-    """Salva os dados no banco de dados PostgreSQL, incluindo múltiplas figuras/órgãos."""
     conn = conectar_banco()
     if conn is None:
         logger.error("Não foi possível conectar ao banco.")
@@ -132,16 +131,20 @@ def salvar_no_banco(data: dict):
     try:
         cursor = conn.cursor()
 
-        # Construir os campos com base no que o bot envia
         data_registro = datetime.strptime(data['data'], '%Y-%m-%d').date()
+
         categoria = data.get('orgao_publico')
-        participante = f"{data.get('orgao_publico')} - {data.get('municipio')}"
+        if not categoria:
+            logger.warning("Campo 'orgao_publico' está vazio! Preenchendo como 'NÃO INFORMADO'.")
+            categoria = "NÃO INFORMADO"
+
+        participante = f"{categoria} - {data.get('municipio')}"
         cliente = f"{data.get('figura_publica')} - {data.get('cargo')}"
         assunto = data.get('assunto')
-        tipo_atendimento = data.get('tipo_atendimento')  # novo handler deve alimentar isso
+        tipo_atendimento = data.get('tipo_atendimento')
         municipio = data.get('municipio')
         colaborador = data.get('colaborador')
-        atendimento = data.get('tipo_visita')  # pode vir como None
+        atendimento = data.get('tipo_visita')
 
         cursor.execute("""
             INSERT INTO planilha_registros (
@@ -153,7 +156,7 @@ def salvar_no_banco(data: dict):
         ))
 
         conn.commit()
-        logger.info("Registro salvo com sucesso na tabela planilha_registros.")
+        logger.info(f"Registro salvo: {data_registro}, {categoria}, {participante}")
 
     except Exception as e:
         conn.rollback()
