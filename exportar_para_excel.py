@@ -4,6 +4,8 @@ import logging
 import pandas as pd
 from datetime import datetime
 from io import BytesIO
+import pickle
+from googleapiclient.discovery import build
 
 # Importação CORRETA para credenciais de conta de serviço
 from google.oauth2.service_account import Credentials 
@@ -35,27 +37,15 @@ if not GOOGLE_DRIVE_PHOTOS_FOLDER_ID:
 # --- Funções Auxiliares para Google Drive ---
 
 def get_drive_service():
-    """
-    Autentica e retorna o objeto de serviço do Google Drive API.
-    Lê as credenciais da variável de ambiente GOOGLE_CREDENTIALS_JSON.
-    """
-    if not GOOGLE_CREDENTIALS_JSON:
-        raise ValueError("GOOGLE_CREDENTIALS_JSON não configurado. Não é possível autenticar no Google Drive.")
-    
     try:
-        creds_info = json.loads(GOOGLE_CREDENTIALS_JSON)
-        
-        creds = Credentials.from_service_account_info(
-            info=creds_info, 
-            scopes=['https://www.googleapis.com/auth/drive'] 
-        )
-
+        with open('token.pickle', 'rb') as token:
+            creds = pickle.load(token)
         service = build('drive', 'v3', credentials=creds)
-        logger.info("Serviço do Google Drive API autenticado com sucesso.")
         return service
     except Exception as e:
-        logger.error(f"Erro ao autenticar no Google Drive: {e}", exc_info=True)
+        logger.error(f"Erro ao carregar credenciais do token.pickle: {e}")
         raise
+
 
 def _get_file_id_by_name(service, filename: str, folder_id: str = None) -> str | None:
     """
