@@ -7,6 +7,8 @@ from io import BytesIO
 import pickle
 from googleapiclient.discovery import build
 import base64
+from googleapiclient.http import MediaFileUpload
+from googleapiclient.http import MediaIoBaseDownload
 
 # Importação CORRETA para credenciais de conta de serviço
 from google.oauth2.service_account import Credentials 
@@ -94,6 +96,8 @@ def _download_file_content(service, file_id: str) -> str:
         raise
 
 # --- FUNÇÃO ATUALIZADA PARA UPLOAD DE EXCEL (XLSX) ---
+from googleapiclient.http import MediaIoBaseDownload
+
 def _upload_or_update_excel(service, filename: str, df_novo: pd.DataFrame, folder_id: str = None):
     """
     Lê a planilha existente no Drive, adiciona novos dados e salva novamente no mesmo arquivo.
@@ -112,22 +116,29 @@ def _upload_or_update_excel(service, filename: str, df_novo: pd.DataFrame, folde
 
     df_existente = pd.DataFrame(columns=colunas_padrao)
 
-    # Baixa e lê o conteúdo da planilha existente
+    # --- BAIXAR PLANILHA EXISTENTE DO DRIVE (CORRETAMENTE) ---
     if file_id:
         try:
             request = service.files().get_media(fileId=file_id)
             buffer = BytesIO()
-            request.execute(fd=buffer)
+            downloader = MediaIoBaseDownload(buffer, request)
+            done = False
+            while not done:
+                status, done = downloader.next_chunk()
+
             buffer.seek(0)
             df_existente = pd.read_excel(buffer, engine='openpyxl')
             logger.info(f"Arquivo existente lido com {len(df_existente)} registros.")
         except Exception as e:
-            logger.warning(f"Não foi possível ler o Excel existente, será criado novo. Erro: {e}")
+            logger.warning(f"Não foi possível ler o Excel existente. Será criado novo. Erro: {e}")
 
     # Junta os dados antigos com os novos
     df_final = pd.concat([df_existente, df_novo], ignore_index=True)
 
-    # Salva o novo conteúdo
+    # Remove duplicados se necessário (por exemplo, com base em DATA + CLIENTE + ASSUNTO)
+    df_final.drop_duplicates(subset=["DATA", "CLIENTE", "ASSUNTO"], inplace=True)
+
+    # Salva o novo conteúdo no buffer
     excel_buffer = BytesIO()
     df_final.to_excel(excel_buffer, index=False, engine='openpyxl')
     excel_buffer.seek(0)
@@ -149,6 +160,7 @@ def _upload_or_update_excel(service, filename: str, df_novo: pd.DataFrame, folde
     except Exception as e:
         logger.error(f"Erro ao atualizar ou criar o Excel '{filename}': {e}", exc_info=True)
         raise
+
 
 async def upload_photo_to_drive(file_bytes: bytes, filename: str) -> str | None:
     """
