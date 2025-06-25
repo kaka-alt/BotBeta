@@ -365,65 +365,79 @@ async def data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if query.data == "data_hoje":
             dt = datetime.now()
             context.user_data['data'] = dt.strftime("%Y-%m-%d") 
-            await query.message.edit_text(f"✅ Data registrada: <b>{dt.strftime('%Y/%m/%d %H:%M')}</b>.", parse_mode=ParseMode.HTML) 
-            await query.message.reply_text("📝 Quer adicionar uma <b>demanda</b> relacionada a esta ocorrência?", parse_mode=ParseMode.HTML)
+            await query.message.edit_text(f"✅ Data registrada: <b>{dt.strftime('%Y/%m/%d %H:%M')}</b>.", parse_mode=ParseMode.HTML)
+
+            # Pula diretamente para a etapa de demanda
+            buttons = [
+                [InlineKeyboardButton("➕ Adicionar demanda", callback_data="add_demanda")],
+                [InlineKeyboardButton("⏭️ Pular demandas", callback_data="fim_demandas")], 
+            ]
+            reply_markup = InlineKeyboardMarkup(buttons)
+            await query.message.reply_text("📝 Quer adicionar uma <b>demanda</b> relacionada a esta ocorrência?", reply_markup=reply_markup, parse_mode=ParseMode.HTML)
             return DEMANDA_ESCOLHA
 
         elif query.data == "data_manual":
             await query.message.edit_text("✍️ Entendido. Por favor, digite a data no formato <b>AAAA/MM/DD</b> (ex: 2025/06/04):", parse_mode=ParseMode.HTML)
-            return DATA_MANUAL 
+            return DATA_MANUAL
 
-    else: 
+    else:  # Usuário digitou manualmente a data
         texto = update.message.text.strip()
         try:
             dt = datetime.strptime(texto, "%Y/%m/%d")
             context.user_data['data'] = dt.strftime("%Y-%m-%d")
             await update.message.reply_text(f"✅ Data registrada: <b>{dt.strftime('%Y/%m/%d')}</b>.", parse_mode=ParseMode.HTML)
-            await update.message.reply_text("📝 Quer adicionar uma <b>demanda</b> relacionada a esta ocorrência?", parse_mode=ParseMode.HTML)
+
+            buttons = [
+                [InlineKeyboardButton("➕ Adicionar demanda", callback_data="add_demanda")],
+                [InlineKeyboardButton("⏭️ Pular demandas", callback_data="fim_demandas")], 
+            ]
+            reply_markup = InlineKeyboardMarkup(buttons)
+            await update.message.reply_text("📝 Quer adicionar uma <b>demanda</b> relacionada a esta ocorrência?", reply_markup=reply_markup, parse_mode=ParseMode.HTML)
             return DEMANDA_ESCOLHA 
         except ValueError:
             await update.message.reply_text("❗ Formato inválido. Por favor, digite a data no formato <b>AAAA/MM/DD</b> (ex: 2025/06/04):", parse_mode=ParseMode.HTML)
-            return DATA_MANUAL 
+            return DATA_MANUAL
 
 
-# --- Etapa: Foto da Ocorrência ---
-async def foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message.photo:
-        await update.message.reply_text("❗ Isso não parece uma foto. Por favor, envie uma <b>foto válida</b> da ocorrência.", parse_mode=ParseMode.HTML)
-        return FOTO
+# --- Etapa: Foto da Ocorrência (DESATIVADA TEMPORARIAMENTE) ---
+# async def foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     if not update.message.photo:
+#         await update.message.reply_text("❗ Isso não parece uma foto. Por favor, envie uma <b>foto válida</b> da ocorrência.", parse_mode=ParseMode.HTML)
+#         return FOTO
 
-    photo = update.message.photo[-1] 
-    telegram_file = await context.bot.get_file(photo.file_id) 
-    photo_bytes = await telegram_file.download_as_bytearray() 
+#     photo = update.message.photo[-1] 
+#     telegram_file = await context.bot.get_file(photo.file_id) 
+#     photo_bytes = await telegram_file.download_as_bytearray() 
 
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    user_id = update.effective_user.id
-    filename = f"foto_{user_id}_{timestamp}.jpg" 
+#     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+#     user_id = update.effective_user.id
+#     filename = f"foto_{user_id}_{timestamp}.jpg" 
 
-    logger.info(f"Tentando fazer upload da foto {filename} para o Google Drive.")
-    await update.message.reply_text("⏳ Enviando a foto para o Google Drive... Por favor, aguarde, isso pode levar alguns segundos.", parse_mode=ParseMode.HTML) 
-    drive_file_id = await upload_photo_to_drive(bytes(photo_bytes), filename) 
+#     logger.info(f"Tentando fazer upload da foto {filename} para o Google Drive.")
+#     await update.message.reply_text("⏳ Enviando a foto para o Google Drive... Por favor, aguarde, isso pode levar alguns segundos.", parse_mode=ParseMode.HTML) 
+#     drive_file_id = await upload_photo_to_drive(bytes(photo_bytes), filename) 
     
-    if drive_file_id:
-        context.user_data["foto"] = drive_file_id 
-        logger.info(f"Foto salva no Google Drive. ID: {drive_file_id}")
-        await update.message.reply_text("✅ Foto recebida e enviada para o Google Drive com sucesso!")
-    else:
-        context.user_data["foto"] = "Erro no upload" 
-        logger.error("Falha ao enviar foto para o Google Drive.")
-        await update.message.reply_text("❌ Ocorreu um erro ao enviar a foto para o Google Drive. Por favor, tente novamente.", parse_mode=ParseMode.HTML)
-        return FOTO 
+#     if drive_file_id:
+#         context.user_data["foto"] = drive_file_id 
+#         logger.info(f"Foto salva no Google Drive. ID: {drive_file_id}")
+#         await update.message.reply_text("✅ Foto recebida e enviada para o Google Drive com sucesso!")
+#     else:
+#         context.user_data["foto"] = "Erro no upload" 
+#         logger.error("Falha ao enviar foto para o Google Drive.")
+#         await update.message.reply_text("❌ Ocorreu um erro ao enviar a foto para o Google Drive. Por favor, tente novamente.", parse_mode=ParseMode.HTML)
+#         return FOTO 
 
-    context.user_data["demandas"] = [] 
+#     context.user_data["demandas"] = [] 
 
-    buttons = [
-        [InlineKeyboardButton("➕ Adicionar demanda", callback_data="add_demanda")],
-        [InlineKeyboardButton("⏭️ Pular demandas", callback_data="fim_demandas")], 
-    ]
-    reply_markup = InlineKeyboardMarkup(buttons)
+#     buttons = [
+#         [InlineKeyboardButton("➕ Adicionar demanda", callback_data="add_demanda")],
+#         [InlineKeyboardButton("⏭️ Pular demandas", callback_data="fim_demandas")], 
+#     ]
+#     reply_markup = InlineKeyboardMarkup(buttons)
 
-    await update.message.reply_text("📝 Quer adicionar uma <b>demanda</b> relacionada a esta ocorrência?", reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-    return DEMANDA_ESCOLHA 
+#     await update.message.reply_text("📝 Quer adicionar uma <b>demanda</b> relacionada a esta ocorrência?", reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+#     return DEMANDA_ESCOLHA 
+
 
 # --- Etapa: Demanda ---
 async def demanda(update, context):
