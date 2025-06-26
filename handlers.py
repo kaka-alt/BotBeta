@@ -98,7 +98,7 @@ async def solicitar_tipo_atendimento(update: Update, context: ContextTypes.DEFAU
         [InlineKeyboardButton("🗺️ PRESENCIAL - EXTERNO", callback_data="tipo_atendimento_presencial - externo")],
         [InlineKeyboardButton("💻 VIRTUAL", callback_data="tipo_atendimento_virtual")],
     ]
-    keyboard = InlineKeyboardMarkup.from_row(buttons)
+    keyboard = InlineKeyboardMarkup(buttons)
 
     if update.message:
         await update.message.reply_text("🤝 Excelente! Agora, por favor, selecione o <b>tipo de atendimento</b> realizado:", reply_markup=keyboard, parse_mode=ParseMode.HTML)
