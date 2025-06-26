@@ -165,6 +165,7 @@ def _upload_or_update_excel(service, filename: str, df_novo: pd.DataFrame, folde
         df_formatado["MUNICIPIO"] = df_novo["MUNICIPIO"]
         df_formatado["COLABORADOR"] = df_novo["COLABORADOR"]
         df_formatado["ATENDIMENTO"] = df_novo["ATENDIMENTO"]
+        df_formatado["TEMA REUNIÃO"] = df_novo["ASSUNTO"].str.upper()
 
         # 3. Lê a planilha atual do Drive
         df_existente = ler_excel_drive_em_memoria(service, file_id)
