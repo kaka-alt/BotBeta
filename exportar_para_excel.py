@@ -9,6 +9,7 @@ from googleapiclient.discovery import build
 import base64
 from googleapiclient.http import MediaFileUpload
 from googleapiclient.http import MediaIoBaseDownload
+import io
 
 # Importação CORRETA para credenciais de conta de serviço
 from google.oauth2.service_account import Credentials 
@@ -95,55 +96,76 @@ def _download_file_content(service, file_id: str) -> str:
         logger.error(f"Erro inesperado ao baixar conteúdo do arquivo {file_id}: {e}", exc_info=True)
         raise
 
+def ler_excel_drive_em_memoria(service, file_id):
+    """Baixa o Excel do Google Drive em memória e retorna o DataFrame."""
+    request = service.files().get_media(fileId=file_id)
+    fh = io.BytesIO()
+    downloader = MediaIoBaseDownload(fh, request)
+    done = False
+    while not done:
+        status, done = downloader.next_chunk()
+    fh.seek(0)
+    logger.info("Arquivo Excel carregado da memória com sucesso.")
+    return pd.read_excel(fh)
+
+def salvar_excel_drive_em_memoria(service, file_id, df_final):
+    """Salva o DataFrame final diretamente de volta ao Google Drive."""
+    excel_bytes = io.BytesIO()
+    with pd.ExcelWriter(excel_bytes, engine='xlsxwriter') as writer:
+        df_final.to_excel(writer, index=False)
+    excel_bytes.seek(0)
+
+
 # --- FUNÇÃO ATUALIZADA PARA UPLOAD DE EXCEL (XLSX) ---
 from googleapiclient.http import MediaIoBaseDownload
 
 def _upload_or_update_excel(service, filename: str, df_novo: pd.DataFrame, folder_id: str = None):
+    logger.info("Iniciando processo de atualização da planilha REUNIAO_PP.xlsx...")
+    service = get_drive_service()
+    file_id = "11xRCRDXkP1h-x70vMK7DubBwh8KvriAn"  # seu ID fixo do Drive
+
+    # Conectar ao banco
     conn = conectar_banco()
     if conn is None:
-        logger.error("Não foi possível conectar ao banco.")
+        logger.error("Não foi possível conectar ao banco de dados.")
         return
 
     try:
-        # Lê os dados novos salvos no banco
+        # 1. Lê os dados do banco
         df_novo = pd.read_sql("SELECT * FROM planilha_registros ORDER BY id DESC", conn)
         logger.info(f"Lendo {len(df_novo)} registros da nova tabela.")
 
-        # Padroniza colunas para garantir consistência
+        # 2. Formatar colunas
         df_novo.columns = [col.upper().strip() for col in df_novo.columns]
-
-        # Formata os dados no layout da planilha
         df_formatado = pd.DataFrame()
         df_formatado["DATA"] = df_novo["DATA"]
         df_formatado["CATEGORIA"] = df_novo["CATEGORIA"]
-        df_formatado["PARTICIPANTE"] = df_novo["PARTICIPANTE"]
+        df_formatado["PARTICIPANTE"] = df_novo["CATEGORIA"] + " - " + df_novo["MUNICIPIO"]
         df_formatado["CLIENTE"] = df_novo["CLIENTE"]
         df_formatado["ASSUNTO"] = df_novo["ASSUNTO"]
         df_formatado["TIPO ATENDIMENTO"] = df_novo["TIPO_ATENDIMENTO"]
         df_formatado["MUNICIPIO"] = df_novo["MUNICIPIO"]
         df_formatado["COLABORADOR"] = df_novo["COLABORADOR"]
-        df_formatado["Item Type"] = ""  # Campo vazio se não usado
-        df_formatado["Path"] = ""       # Campo vazio se não usado
+        df_formatado["Item Type"] = ""
+        df_formatado["Path"] = ""
         df_formatado["ATENDIMENTO"] = df_novo["ATENDIMENTO"]
 
-        # --- PARTE DE EXPORTAÇÃO PARA EXCEL ---
-
-        # Lê a planilha já existente no Drive
-        df_existente = pd.read_excel("REUNIAO_PP.xlsx")  # ou caminho do download
+        # 3. Lê a planilha atual do Drive
+        df_existente = ler_excel_drive_em_memoria(service, file_id)
         logger.info(f"Arquivo existente lido com {len(df_existente)} registros.")
 
-        # Concatena os dados novos no fim
+        # 4. Concatena
         df_final = pd.concat([df_existente, df_formatado], ignore_index=True)
+        logger.info(f"Arquivo final com {len(df_final)} registros (após concatenação).")
 
-        # Salva novamente com todos os registros
-        df_final.to_excel("REUNIAO_PP.xlsx", index=False)
-        logger.info(f"Arquivo 'REUNIAO_PP.xlsx' atualizado com {len(df_final)} registros.")
+        # 5. Salva de volta no Drive
+        salvar_excel_drive_em_memoria(service, file_id, df_final)
 
     except Exception as e:
         logger.error(f"Erro ao atualizar planilha: {e}", exc_info=True)
     finally:
-        conn.close()
-
+        if conn:
+            conn.close()
 
 async def upload_photo_to_drive(file_bytes: bytes, filename: str) -> str | None:
     """
