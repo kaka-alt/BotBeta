@@ -366,7 +366,7 @@ async def assunto_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- Etapa: Município ---
 async def municipio(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['municipio'] = update.message.text.strip()
+    context.user_data['municipio'] = update.message.text.strip().upper()
     await update.message.reply_text(f"✅ Município registrado: <b>{context.user_data['municipio']}</b>.", parse_mode=ParseMode.HTML)
     return await solicitar_data(update, context) 
 
