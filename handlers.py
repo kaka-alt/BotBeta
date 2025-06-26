@@ -92,17 +92,17 @@ async def tipo_visita_escolha(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data["figuras_orgaos"] = [] # Inicializa a lista de figuras/órgãos
     return await solicitar_tipo_atendimento(update, context)
 
-
+#ATENDIMENTO!!!!
 async def solicitar_tipo_atendimento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     buttons = [
-        InlineKeyboardButton("⚡ PRESENCIAL - EDP", callback_data="tipo_visita_reativo"),
-        InlineKeyboardButton("🗺️ PRESENCIAL - EXTERNO", callback_data="tipo_visita_proativo"),
-        InlineKeyboardButton("💻 VIRTUAL", callback_data="tipo_visita_telefonico"),
+        InlineKeyboardButton("⚡ PRESENCIAL - EDP", callback_data="tipo_atendimento_edp"),
+        InlineKeyboardButton("🗺️ PRESENCIAL - EXTERNO", callback_data="tipo_atendimento_externo"),
+        InlineKeyboardButton("💻 VIRTUAL", callback_data="tipo_atendimento_virtual"),
     ]
     keyboard = InlineKeyboardMarkup.from_row(buttons)
 
     if update.message:
-        await update.message.reply_text("🤝 Excelente! Agora, por favor, selecione o <b>tipe atendimento</b> realizado:", reply_markup=keyboard, parse_mode=ParseMode.HTML)
+        await update.message.reply_text("🤝 Excelente! Agora, por favor, selecione o <b>tipo de atendimento</b> realizado:", reply_markup=keyboard, parse_mode=ParseMode.HTML)
     elif update.callback_query:
         await update.callback_query.message.reply_text("🤝 Excelente! Agora, por favor, selecione o <b>tipo de atendimento</b> realizado:", reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
