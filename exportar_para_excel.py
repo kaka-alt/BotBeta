@@ -164,8 +164,6 @@ def _upload_or_update_excel(service, filename: str, df_novo: pd.DataFrame, folde
         df_formatado["TIPO ATENDIMENTO"] = df_novo["TIPO_ATENDIMENTO"]
         df_formatado["MUNICIPIO"] = df_novo["MUNICIPIO"]
         df_formatado["COLABORADOR"] = df_novo["COLABORADOR"]
-        df_formatado["Item Type"] = ""
-        df_formatado["Path"] = ""
         df_formatado["ATENDIMENTO"] = df_novo["ATENDIMENTO"]
 
         # 3. Lê a planilha atual do Drive
