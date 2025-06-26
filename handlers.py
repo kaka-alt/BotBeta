@@ -24,7 +24,7 @@ ORGAO_FIGURA_CARGO_ESCOLHA, ORGAO_PUBLICO_FOR_FIGURA_KEYWORD, ORGAO_PUBLICO_FOR_
 FIGURA_PUBLICA_FOR_FIGURA, CARGO_FOR_FIGURA, MAIS_FIGURAS_ORGAOS, \
 ASSUNTO_INICIAL_ESCOLHA, ASSUNTO_PALAVRA_CHAVE, ASSUNTO_PAGINACAO, ASSUNTO_MANUAL, \
 MUNICIPIO, DATA, DATA_MANUAL, FOTO, DEMANDA_ESCOLHA, DEMANDA_DIGITAR, OV, PRO, \
-OBSERVACAO_ESCOLHA, OBSERVACAO_DIGITAR, CONFIRMACAO_FINAL = range(25) # AJUSTADO: range(26) para os novos estados
+OBSERVACAO_ESCOLHA, OBSERVACAO_DIGITAR, CONFIRMACAO_FINAL, TIPO_ATENDIMENTO = range(26) # AJUSTADO: range(26) para os novos estados
 
 
 # --- Início do Nosso Registro: Seleção do Colaborador ---
@@ -90,7 +90,37 @@ async def tipo_visita_escolha(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.message.edit_text(f"✅ Tipo de visita selecionado: <b>{tipo_visita.capitalize()}</b>.", parse_mode=ParseMode.HTML)
     # NOVO FLUXO: Após o tipo de visita, pergunta se quer adicionar figura pública/órgão
     context.user_data["figuras_orgaos"] = [] # Inicializa a lista de figuras/órgãos
+    return await solicitar_tipo_atendimento(update, context)
+
+
+async def solicitar_tipo_atendimento(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    buttons = [
+        InlineKeyboardButton("⚡ PRESENCIAL - EDP", callback_data="tipo_visita_reativo"),
+        InlineKeyboardButton("🗺️ PRESENCIAL - EXTERNO", callback_data="tipo_visita_proativo"),
+        InlineKeyboardButton("💻 VIRTUAL", callback_data="tipo_visita_telefonico"),
+    ]
+    keyboard = InlineKeyboardMarkup.from_row(buttons)
+
+    if update.message:
+        await update.message.reply_text("🤝 Excelente! Agora, por favor, selecione o <b>tipe atendimento</b> realizado:", reply_markup=keyboard, parse_mode=ParseMode.HTML)
+    elif update.callback_query:
+        await update.callback_query.message.reply_text("🤝 Excelente! Agora, por favor, selecione o <b>tipo de atendimento</b> realizado:", reply_markup=keyboard, parse_mode=ParseMode.HTML)
+
+    return TIPO_ATENDIMENTO
+
+async def tipo_atendimento_escolha(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    tipo_atendimento = data.replace("tipo_atendimento_", "")
+    context.user_data['tipo_atendimento'] = tipo_atendimento.upper()
+
+    await query.message.edit_text(f"✅ Tipo de atendimento selecionado: <b>{tipo_atendimento.capitalize()}</b>.", parse_mode=ParseMode.HTML)
+    # NOVO FLUXO: Após o tipo de atendimento, pergunta se quer adicionar figura pública/órgão
+    context.user_data["figuras_orgaos"] = [] # Inicializa a lista de figuras/órgãos
     return await solicitar_figura_orgao_inicial(update, context)
+
 
 
 # --- NOVO FLUXO: Múltiplas Figuras Públicas/Órgãos ---
@@ -553,6 +583,7 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✨ <b>Resumo da Ocorrência:</b> ✨\n\n"
         f"👤 <b>Colaborador:</b> {dados.get('colaborador', 'N/A')}\n"
         f"🤝 <b>Tipo de Visita:</b> {dados.get('tipo_visita', 'N/A')}\n" 
+        f"📞 <b>Tipo de Atendimento:</b> {dados.get('tipo_atendimento', 'N/A')}\n"
         f"📅 <b>Data:</b> {dados.get('data', 'N/A')}\n" # Move data para cima
         f"🌍 <b>Município:</b> {dados.get('municipio', 'N/A')}\n" # Move município para cima
         f"📌 <b>Assunto:</b> {dados.get('assunto', 'N/A')}\n" # Move assunto para cima

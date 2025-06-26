@@ -161,7 +161,8 @@ async def startup_event():
             states={
                 handlers.COLABORADOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.colaborador_manual), CallbackQueryHandler(handlers.colaborador_button)],
                 handlers.COLABORADOR_MANUAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.colaborador_manual)],
-                handlers.TIPO_VISITA: [CallbackQueryHandler(handlers.tipo_visita_escolha)], 
+                handlers.TIPO_VISITA: [CallbackQueryHandler(handlers.tipo_visita_escolha)],
+                handlers.TIPO_ATENDIMENTO: [CallbackQueryHandler(handlers.tipo_atendimento_escolha)],
                 # NOVO FLUXO PARA MULTIPLAS FIGURAS/ORGAOS
                 handlers.ORGAO_FIGURA_CARGO_ESCOLHA: [CallbackQueryHandler(handlers.figura_orgao_escolha)],
                 handlers.ORGAO_PUBLICO_FOR_FIGURA_KEYWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.buscar_orgao_for_figura)],
