@@ -109,11 +109,30 @@ def ler_excel_drive_em_memoria(service, file_id):
     return pd.read_excel(fh)
 
 def salvar_excel_drive_em_memoria(service, file_id, df_final):
-    """Salva o DataFrame final diretamente de volta ao Google Drive."""
-    excel_bytes = io.BytesIO()
-    with pd.ExcelWriter(excel_bytes, engine='xlsxwriter') as writer:
-        df_final.to_excel(writer, index=False)
+    from pandas import ExcelWriter
+
+    # Criar buffer em memória
+    excel_bytes = BytesIO()
+    with ExcelWriter(excel_bytes, engine="xlsxwriter") as writer:
+        df_final.to_excel(writer, index=False, sheet_name="REUNIOES")
+
     excel_bytes.seek(0)
+
+    # Prepara mídia e metadados
+    media = MediaIoBaseUpload(excel_bytes, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    file_metadata = {
+        'name': 'REUNIAO_PP.xlsx',
+        'mimeType': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    }
+
+    # ⚠️ Atualiza o arquivo existente
+    updated_file = service.files().update(
+        fileId=file_id,
+        media_body=media,
+        body=file_metadata
+    ).execute()
+
+    logger.info(f"Arquivo atualizado com sucesso no Drive. ID: {updated_file.get('id')}")
 
 
 # --- FUNÇÃO ATUALIZADA PARA UPLOAD DE EXCEL (XLSX) ---
