@@ -95,9 +95,9 @@ async def tipo_visita_escolha(update: Update, context: ContextTypes.DEFAULT_TYPE
 #ATENDIMENTO!!!!
 async def solicitar_tipo_atendimento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     buttons = [
-        InlineKeyboardButton("⚡ PRESENCIAL - EDP", callback_data="tipo_atendimento_edp"),
-        InlineKeyboardButton("🗺️ PRESENCIAL - EXTERNO", callback_data="tipo_atendimento_externo"),
-        InlineKeyboardButton("💻 VIRTUAL", callback_data="tipo_atendimento_virtual"),
+        [InlineKeyboardButton("⚡ PRESENCIAL - EDP", callback_data="tipo_atendimento_presencial - edp")],
+        [InlineKeyboardButton("🗺️ PRESENCIAL - EXTERNO", callback_data="tipo_atendimento_presencial - externo")],
+        [InlineKeyboardButton("💻 VIRTUAL", callback_data="tipo_atendimento_virtual")],
     ]
     keyboard = InlineKeyboardMarkup.from_row(buttons)
 
