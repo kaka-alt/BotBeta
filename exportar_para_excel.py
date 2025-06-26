@@ -99,67 +99,50 @@ def _download_file_content(service, file_id: str) -> str:
 from googleapiclient.http import MediaIoBaseDownload
 
 def _upload_or_update_excel(service, filename: str, df_novo: pd.DataFrame, folder_id: str = None):
-    """
-    Lê a planilha existente no Drive, adiciona novos dados e salva novamente no mesmo arquivo.
-    """
-    file_id = _get_file_id_by_name(service, filename, folder_id)
-    colunas_padrao = [
-        "DATA", "CATEGORIA", "PARTICIPANTE", "CLIENTE", "ASSUNTO", "TIPO ATENDIMENTO",
-        "MUNICIPIO", "COLABORADOR", "Item Type", "Path", "ATENDIMENTO"
-    ]
-
-    # Preenche campos ausentes no df_novo
-    for col in colunas_padrao:
-        if col not in df_novo.columns:
-            df_novo[col] = ""
-    df_novo = df_novo[colunas_padrao]  # Reordena as colunas
-
-    df_existente = pd.DataFrame(columns=colunas_padrao)
-
-    # --- BAIXAR PLANILHA EXISTENTE DO DRIVE (CORRETAMENTE) ---
-    if file_id:
-        try:
-            request = service.files().get_media(fileId=file_id)
-            buffer = BytesIO()
-            downloader = MediaIoBaseDownload(buffer, request)
-            done = False
-            while not done:
-                status, done = downloader.next_chunk()
-
-            buffer.seek(0)
-            df_existente = pd.read_excel(buffer, engine='openpyxl')
-            logger.info(f"Arquivo existente lido com {len(df_existente)} registros.")
-        except Exception as e:
-            logger.warning(f"Não foi possível ler o Excel existente. Será criado novo. Erro: {e}")
-
-    # Junta os dados antigos com os novos
-    df_final = pd.concat([df_existente, df_novo], ignore_index=True)
-
-    # Remove duplicados se necessário (por exemplo, com base em DATA + CLIENTE + ASSUNTO)
-    df_final.drop_duplicates(subset=["DATA", "CLIENTE", "ASSUNTO"], inplace=True)
-
-    # Salva o novo conteúdo no buffer
-    excel_buffer = BytesIO()
-    df_final.to_excel(excel_buffer, index=False, engine='openpyxl')
-    excel_buffer.seek(0)
-
-    media_body = MediaIoBaseUpload(excel_buffer,
-                                   mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                                   resumable=True)
+    conn = conectar_banco()
+    if conn is None:
+        logger.error("Não foi possível conectar ao banco.")
+        return
 
     try:
-        if file_id:
-            service.files().update(fileId=file_id, media_body=media_body).execute()
-            logger.info(f"Arquivo '{filename}' atualizado com {len(df_final)} registros.")
-        else:
-            file_metadata = {'name': filename, 'mimeType': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}
-            if folder_id:
-                file_metadata['parents'] = [folder_id]
-            file = service.files().create(body=file_metadata, media_body=media_body, fields='id').execute()
-            logger.info(f"Arquivo '{filename}' criado com {len(df_final)} registros.")
+        # Lê os dados novos salvos no banco
+        df_novo = pd.read_sql("SELECT * FROM planilha_registros ORDER BY id DESC", conn)
+        logger.info(f"Lendo {len(df_novo)} registros da nova tabela.")
+
+        # Padroniza colunas para garantir consistência
+        df_novo.columns = [col.upper().strip() for col in df_novo.columns]
+
+        # Formata os dados no layout da planilha
+        df_formatado = pd.DataFrame()
+        df_formatado["DATA"] = df_novo["DATA"]
+        df_formatado["CATEGORIA"] = df_novo["CATEGORIA"]
+        df_formatado["PARTICIPANTE"] = df_novo["PARTICIPANTE"]
+        df_formatado["CLIENTE"] = df_novo["CLIENTE"]
+        df_formatado["ASSUNTO"] = df_novo["ASSUNTO"]
+        df_formatado["TIPO ATENDIMENTO"] = df_novo["TIPO_ATENDIMENTO"]
+        df_formatado["MUNICIPIO"] = df_novo["MUNICIPIO"]
+        df_formatado["COLABORADOR"] = df_novo["COLABORADOR"]
+        df_formatado["Item Type"] = ""  # Campo vazio se não usado
+        df_formatado["Path"] = ""       # Campo vazio se não usado
+        df_formatado["ATENDIMENTO"] = df_novo["ATENDIMENTO"]
+
+        # --- PARTE DE EXPORTAÇÃO PARA EXCEL ---
+
+        # Lê a planilha já existente no Drive
+        df_existente = pd.read_excel("REUNIAO_PP.xlsx")  # ou caminho do download
+        logger.info(f"Arquivo existente lido com {len(df_existente)} registros.")
+
+        # Concatena os dados novos no fim
+        df_final = pd.concat([df_existente, df_formatado], ignore_index=True)
+
+        # Salva novamente com todos os registros
+        df_final.to_excel("REUNIAO_PP.xlsx", index=False)
+        logger.info(f"Arquivo 'REUNIAO_PP.xlsx' atualizado com {len(df_final)} registros.")
+
     except Exception as e:
-        logger.error(f"Erro ao atualizar ou criar o Excel '{filename}': {e}", exc_info=True)
-        raise
+        logger.error(f"Erro ao atualizar planilha: {e}", exc_info=True)
+    finally:
+        conn.close()
 
 
 async def upload_photo_to_drive(file_bytes: bytes, filename: str) -> str | None:
