@@ -89,7 +89,6 @@ async def tipo_visita_escolha(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     await query.message.edit_text(f"✅ Tipo de visita selecionado: <b>{tipo_visita.capitalize()}</b>.", parse_mode=ParseMode.HTML)
     # NOVO FLUXO: Após o tipo de visita, pergunta se quer adicionar figura pública/órgão
-    context.user_data["figuras_orgaos"] = [] # Inicializa a lista de figuras/órgãos
     return await solicitar_tipo_atendimento(update, context)
 
 #ATENDIMENTO!!!!
