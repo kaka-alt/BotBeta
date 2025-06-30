@@ -642,6 +642,7 @@ async def confirmacao(update, context):
         utils.salvar_no_banco(context.user_data) 
         utils.export_data_to_drive()
         utils.salvar_demandas_no_banco(context.user_data, context.user_data.get("demandas", []))
+        utils.export_demandas_to_drive(context.user_data.get("demandas", []))
         await query.edit_message_text(
             "🎉 Dados salvos com sucesso no banco de dados e nos arquivos Excel do Google Drive! Muito obrigado pelo seu registro.", 
             parse_mode=ParseMode.HTML
