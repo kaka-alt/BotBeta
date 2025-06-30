@@ -334,7 +334,7 @@ def export_data_to_drive():
 
 
 def export_demandas_to_drive():
-    logger.info("Iniciando exportação para planilha 'DEMANDAS_PP.xlsx'")
+    logger.info("Iniciando exportação incremental para planilha 'DEMANDAS_PP.xlsx'")
     service = get_drive_service()
     if not service:
         logger.error("Serviço do Google Drive não disponível.")
@@ -344,17 +344,17 @@ def export_demandas_to_drive():
     spreadsheet_name = "DEMANDAS_PP.xlsx"
 
     try:
-        # 1. Verifica se o arquivo existe no Drive
+        # 1. Buscar o arquivo no Google Drive
         query = f"name='{spreadsheet_name}' and '{folder_id}' in parents and trashed=false"
         results = service.files().list(q=query, fields="files(id, name)").execute()
         files = results.get("files", [])
         if not files:
-            raise FileNotFoundError(f"Arquivo '{spreadsheet_name}' não encontrado.")
+            raise FileNotFoundError(f"Arquivo '{spreadsheet_name}' não encontrado na pasta do Drive.")
 
         file_id = files[0]["id"]
-        logger.info(f"Arquivo de demandas encontrado no Drive com ID: {file_id}")
+        logger.info(f"Arquivo encontrado no Drive com ID: {file_id}")
 
-        # 2. Baixar conteúdo existente
+        # 2. Baixar conteúdo da planilha
         request = service.files().get_media(fileId=file_id)
         fh = BytesIO()
         downloader = MediaIoBaseDownload(fh, request)
@@ -362,35 +362,61 @@ def export_demandas_to_drive():
         while not done:
             status, done = downloader.next_chunk()
         fh.seek(0)
+
         df_existente = pd.read_excel(fh, engine='openpyxl')
-        logger.info(f"Arquivo existente de demandas: {len(df_existente)} linhas")
+        logger.info(f"Planilha atual carregada. Linhas existentes: {len(df_existente)}")
 
-        # 3. Puxar novos dados do banco
+        # 3. Ler novos dados da tabela de demandas
         conn = conectar_banco()
-        df_demandas = pd.read_sql("SELECT * FROM planilha_demandas ORDER BY id ASC", conn)
-        conn.close()
-        logger.info(f"Total de registros de demandas no banco: {len(df_demandas)}")
+        if conn is None:
+            raise Exception("Falha ao conectar ao banco.")
+        df_novo = pd.read_sql("SELECT * FROM planilha_demandas ORDER BY id ASC", conn)
+        logger.info(f"Novos registros lidos da tabela planilha_demandas: {len(df_novo)}")
 
-        # 4. Padronizar
-        df_demandas.columns = [col.upper().strip() for col in df_demandas.columns]
-        df_final = pd.concat([df_existente, df_demandas], ignore_index=True)
-        logger.info(f"Total após concatenação: {len(df_final)}")
+        # 4. Padronizar colunas
+        df_novo.columns = [col.upper().strip() for col in df_novo.columns]
+        df_formatado = pd.DataFrame()
 
-        # 5. Salvar de volta no Drive
-        buffer = BytesIO()
-        df_final.to_excel(buffer, index=False, engine='openpyxl')
-        buffer.seek(0)
+        df_formatado["DATA"] = df_novo["DATA"]
+        df_formatado["MUNICIPIO"] = df_novo["MUNICIPIO"]
+        df_formatado["COLABORADOR"] = df_novo["COLABORADOR"]
+        df_formatado["CATEGORIA"] = df_novo["CATEGORIA"]
+        df_formatado["PARTICIPANTE"] = df_novo["PARTICIPANTE"]
+        df_formatado["CLIENTE"] = df_novo["CLIENTE"]
+        df_formatado["ASSUNTO"] = df_novo["ASSUNTO"]
+        df_formatado["TIPO ATENDIMENTO"] = df_novo["TIPO_ATENDIMENTO"]
+        df_formatado["ATENDIMENTO"] = df_novo["ATENDIMENTO"]
+        df_formatado["DEMANDA"] = df_novo["DEMANDA"]
+        df_formatado["OV"] = df_novo["OV"]
+        df_formatado["PRO"] = df_novo["PRO"]
+        df_formatado["OBSERVACAO"] = df_novo["OBSERVACAO"]
 
-        media_body = MediaIoBaseUpload(buffer,
+        logger.info("Pré-visualização dos dados formatados de demandas:")
+        logger.info(df_formatado.head())
+
+        # 5. Concatenar
+        df_final = pd.concat([df_existente, df_formatado], ignore_index=True)
+        logger.info(f"Total final de linhas na planilha: {len(df_final)}")
+
+        # 6. Salvar no Drive
+        excel_buffer = BytesIO()
+        df_final.to_excel(excel_buffer, index=False, engine='openpyxl')
+        excel_buffer.seek(0)
+
+        media_body = MediaIoBaseUpload(
+            excel_buffer,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             resumable=True
         )
 
         service.files().update(fileId=file_id, media_body=media_body).execute()
-        logger.info("Planilha de demandas atualizada no Drive.")
+        logger.info(f"Planilha '{spreadsheet_name}' atualizada com sucesso no Drive.")
 
     except Exception as e:
-        logger.error(f"Erro ao exportar planilha de demandas: {e}", exc_info=True)
+        logger.error(f"Erro ao exportar dados para planilha de demandas: {e}", exc_info=True)
+    finally:
+        if conn:
+            conn.close()
 
 
 
