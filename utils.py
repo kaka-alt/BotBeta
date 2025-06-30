@@ -350,11 +350,10 @@ def export_demandas_to_drive():
         files = results.get("files", [])
         if not files:
             raise FileNotFoundError(f"Arquivo '{spreadsheet_name}' não encontrado na pasta do Drive.")
-
         file_id = files[0]["id"]
         logger.info(f"Arquivo encontrado no Drive com ID: {file_id}")
 
-        # 2. Baixar conteúdo da planilha
+        # 2. Baixar conteúdo da planilha existente
         request = service.files().get_media(fileId=file_id)
         fh = BytesIO()
         downloader = MediaIoBaseDownload(fh, request)
@@ -362,21 +361,19 @@ def export_demandas_to_drive():
         while not done:
             status, done = downloader.next_chunk()
         fh.seek(0)
-
         df_existente = pd.read_excel(fh, engine='openpyxl')
         logger.info(f"Planilha atual carregada. Linhas existentes: {len(df_existente)}")
 
-        # 3. Ler novos dados da tabela de demandas
+        # 3. Conectar ao banco
         conn = conectar_banco()
         if conn is None:
             raise Exception("Falha ao conectar ao banco.")
         df_novo = pd.read_sql("SELECT * FROM planilha_demandas ORDER BY id ASC", conn)
         logger.info(f"Novos registros lidos da tabela planilha_demandas: {len(df_novo)}")
 
-        # 4. Padronizar colunas
+        # 4. Padronizar colunas e montar DataFrame
         df_novo.columns = [col.upper().strip() for col in df_novo.columns]
         df_formatado = pd.DataFrame()
-
         df_formatado["DATA"] = df_novo["DATA"]
         df_formatado["MUNICIPIO"] = df_novo["MUNICIPIO"]
         df_formatado["COLABORADOR"] = df_novo["COLABORADOR"]
@@ -391,12 +388,18 @@ def export_demandas_to_drive():
         df_formatado["PRO"] = df_novo["PRO"]
         df_formatado["OBSERVACAO"] = df_novo["OBSERVACAO"]
 
+        if df_formatado.empty:
+            logger.warning("Nenhuma nova demanda encontrada para exportar. Exportação cancelada.")
+            return
+
         logger.info("Pré-visualização dos dados formatados de demandas:")
         logger.info(df_formatado.head())
 
         # 5. Concatenar
         df_final = pd.concat([df_existente, df_formatado], ignore_index=True)
         logger.info(f"Total final de linhas na planilha: {len(df_final)}")
+        logger.info("Últimas linhas que serão enviadas à planilha:")
+        logger.info(df_final.tail(5).to_string())
 
         # 6. Salvar no Drive
         excel_buffer = BytesIO()
@@ -415,8 +418,9 @@ def export_demandas_to_drive():
     except Exception as e:
         logger.error(f"Erro ao exportar dados para planilha de demandas: {e}", exc_info=True)
     finally:
-        if conn:
+        if 'conn' in locals() and conn:
             conn.close()
+
 
 
 
