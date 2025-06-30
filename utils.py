@@ -11,6 +11,7 @@ import logging
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+from google.oauth2 import service_account
 
 
 
@@ -182,7 +183,7 @@ def salvar_demandas_no_banco(dados_gerais: dict, demandas: list[dict]):
         cursor = conn.cursor()
 
         # Validação da data
-        data_str = dados_gerais.get('data')
+        data_str = datetime.strptime(data['data'], '%Y-%m-%d').date()
         if not data_str:
             logger.error("Campo 'data' não informado em dados_gerais.")
             return
@@ -239,7 +240,10 @@ def get_drive_service():
             raise ValueError("GOOGLE_CREDENTIALS_JSON não está configurada nas variáveis de ambiente.")
         
         info = json.loads(creds_json)
-        credentials = Credentials.from_info(info, scopes=['https://www.googleapis.com/auth/drive'])
+        credentials = service_account.Credentials.from_service_account_info(
+            info,
+            scopes=['https://www.googleapis.com/auth/drive']
+        )
         service = build('drive', 'v3', credentials=credentials)
         logger.info("Serviço do Google Drive autenticado com sucesso.")
         return service
