@@ -182,22 +182,22 @@ def salvar_demandas_no_banco(dados_gerais: dict, demandas: list[dict]):
     try:
         cursor = conn.cursor()
 
-        data_str = dados_gerais.get('data')
+        data_str = data.get('data')
         if not data_str:
             logger.error("Campo 'data' não informado em dados_gerais.")
             return
         data = datetime.strptime(data_str, '%Y-%m-%d').date()
 
-        municipio = dados_gerais.get('municipio')
-        colaborador = dados_gerais.get('colaborador')
-        atendimento = dados_gerais.get('tipo_visita')
-        tipo_atendimento = dados_gerais.get('tipo_atendimento')
+        municipio = data.get('municipio')
+        colaborador = data.get('colaborador')
+        atendimento = data.get('tipo_visita')
+        tipo_atendimento = data.get('tipo_atendimento')
 
-        figuras_orgaos = dados_gerais.get('figuras_orgaos', [])
+        figuras_orgaos = data.get('figuras_orgaos', [])
         categoria = figuras_orgaos[0].get('orgao_publico') if figuras_orgaos else "NÃO INFORMADO"
         participante = f"{categoria} - {municipio}"
         cliente = f"{figuras_orgaos[0].get('figura_publica')} - {figuras_orgaos[0].get('cargo')}" if figuras_orgaos else ""
-        assunto = dados_gerais.get('assunto')
+        assunto = data.get('assunto')
 
         for d in demandas:
             cursor.execute("""
