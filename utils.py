@@ -169,6 +169,54 @@ def salvar_no_banco(data: dict):
         conn.close()
 
 
+
+def salvar_demandas_no_banco(dados_gerais: dict, demandas: list[dict]):
+    conn = conectar_banco()
+    if conn is None:
+        logger.error("Não foi possível conectar ao banco para salvar demandas.")
+        return
+
+    try:
+        cursor = conn.cursor()
+
+        data = datetime.strptime(dados_gerais['data'], '%Y-%m-%d').date()
+        municipio = dados_gerais.get('municipio')
+        colaborador = dados_gerais.get('colaborador')
+        atendimento = dados_gerais.get('tipo_visita')
+        tipo_atendimento = dados_gerais.get('tipo_atendimento')
+
+        figuras_orgaos = dados_gerais.get('figuras_orgaos', [])
+        categoria = figuras_orgaos[0].get('orgao_publico') if figuras_orgaos else "NÃO INFORMADO"
+        participante = f"{categoria} - {municipio}"
+        cliente = f"{figuras_orgaos[0].get('figura_publica')} - {figuras_orgaos[0].get('cargo')}" if figuras_orgaos else ""
+        assunto = dados_gerais.get('assunto')
+
+        for d in demandas:
+            cursor.execute("""
+                INSERT INTO planilha_demandas (
+                    data, municipio, colaborador, categoria, participante, cliente,
+                    assunto, tipo_atendimento, atendimento, demanda, ov, pro, observacao
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                data, municipio, colaborador, categoria, participante, cliente,
+                assunto, tipo_atendimento, atendimento,
+                d.get("demanda"), d.get("ov"), d.get("pro"), d.get("observacao")
+            ))
+
+        conn.commit()
+        logger.info(f"{len(demandas)} demandas salvas com sucesso.")
+
+    except Exception as e:
+        conn.rollback()
+        logger.error("Erro ao salvar demandas no banco:", exc_info=True)
+    finally:
+        cursor.close()
+        conn.close()
+
+
+
+
+
 # --- FUNÇÕES PARA GOOGLE DRIVE ---
 def get_drive_service():
     """Autentica com a API do Google Drive usando credenciais JSON."""
@@ -270,6 +318,67 @@ def export_data_to_drive():
     finally:
         if conn:
             conn.close()
+            
+
+def export_demandas_to_drive():
+    logger.info("Iniciando exportação para planilha 'DEMANDAS_PP.xlsx'")
+    service = get_drive_service()
+    if not service:
+        logger.error("Serviço do Google Drive não disponível.")
+        return
+
+    folder_id = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
+    spreadsheet_name = "DEMANDAS_PP.xlsx"
+
+    try:
+        # 1. Verifica se o arquivo existe no Drive
+        query = f"name='{spreadsheet_name}' and '{folder_id}' in parents and trashed=false"
+        results = service.files().list(q=query, fields="files(id, name)").execute()
+        files = results.get("files", [])
+        if not files:
+            raise FileNotFoundError(f"Arquivo '{spreadsheet_name}' não encontrado.")
+
+        file_id = files[0]["id"]
+        logger.info(f"Arquivo de demandas encontrado no Drive com ID: {file_id}")
+
+        # 2. Baixar conteúdo existente
+        request = service.files().get_media(fileId=file_id)
+        fh = BytesIO()
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+        fh.seek(0)
+        df_existente = pd.read_excel(fh, engine='openpyxl')
+        logger.info(f"Arquivo existente de demandas: {len(df_existente)} linhas")
+
+        # 3. Puxar novos dados do banco
+        conn = conectar_banco()
+        df_demandas = pd.read_sql("SELECT * FROM planilha_demandas ORDER BY id ASC", conn)
+        conn.close()
+        logger.info(f"Total de registros de demandas no banco: {len(df_demandas)}")
+
+        # 4. Padronizar
+        df_demandas.columns = [col.upper().strip() for col in df_demandas.columns]
+        df_final = pd.concat([df_existente, df_demandas], ignore_index=True)
+        logger.info(f"Total após concatenação: {len(df_final)}")
+
+        # 5. Salvar de volta no Drive
+        buffer = BytesIO()
+        df_final.to_excel(buffer, index=False, engine='openpyxl')
+        buffer.seek(0)
+
+        media_body = MediaIoBaseUpload(buffer,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            resumable=True
+        )
+
+        service.files().update(fileId=file_id, media_body=media_body).execute()
+        logger.info("Planilha de demandas atualizada no Drive.")
+
+    except Exception as e:
+        logger.error(f"Erro ao exportar planilha de demandas: {e}", exc_info=True)
+
 
 
 # Função auxiliar para upload de foto (usada por handlers.py)

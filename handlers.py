@@ -6,6 +6,7 @@ import csv
 import logging 
 from telegram.constants import ParseMode 
 
+
 # Importa as funções que interagem com o Google Drive, como upload de fotos e exportação de dados Excel.
 from exportar_para_excel import export_data_to_drive, upload_photo_to_drive 
 
@@ -637,7 +638,8 @@ async def confirmacao(update, context):
 
     if data == "confirmar_salvar":
         utils.salvar_no_banco(context.user_data) 
-        export_data_to_drive() 
+        utils.export_data_to_drive()
+        utils.salvar_demandas_no_banco(user_data, user_data.get("demandas", []))
         await query.edit_message_text(
             "🎉 Dados salvos com sucesso no banco de dados e nos arquivos Excel do Google Drive! Muito obrigado pelo seu registro.", 
             parse_mode=ParseMode.HTML
