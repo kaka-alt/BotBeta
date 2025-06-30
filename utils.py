@@ -182,17 +182,11 @@ def salvar_demandas_no_banco(dados_gerais: dict, demandas: list[dict]):
     try:
         cursor = conn.cursor()
 
-        # Validação da data
-        data_str = datetime.strptime(dados_gerais['data'], '%Y-%m-%d').date()
+        data_str = dados_gerais.get('data')
         if not data_str:
             logger.error("Campo 'data' não informado em dados_gerais.")
             return
-
-        try:
-            data = datetime.strptime(data_str, '%Y-%m-%d').date()
-        except ValueError as ve:
-            logger.error(f"Formato de data inválido: {data_str}")
-            return
+        data = datetime.strptime(data_str, '%Y-%m-%d').date()
 
         municipio = dados_gerais.get('municipio')
         colaborador = dados_gerais.get('colaborador')
@@ -226,6 +220,7 @@ def salvar_demandas_no_banco(dados_gerais: dict, demandas: list[dict]):
     finally:
         cursor.close()
         conn.close()
+
 
 
 
