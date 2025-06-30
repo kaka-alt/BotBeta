@@ -12,6 +12,8 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
+
+
 logger = logging.getLogger(__name__)
 
 # Funções utilitárias para o bot
@@ -318,7 +320,7 @@ def export_data_to_drive():
     finally:
         if conn:
             conn.close()
-            
+
 
 def export_demandas_to_drive():
     logger.info("Iniciando exportação para planilha 'DEMANDAS_PP.xlsx'")

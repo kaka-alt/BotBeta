@@ -5,6 +5,8 @@ import os
 import csv
 import logging 
 from telegram.constants import ParseMode 
+from google.oauth2.service_account import Credentials
+
 
 
 # Importa as funções que interagem com o Google Drive, como upload de fotos e exportação de dados Excel.
