@@ -6,7 +6,7 @@ import csv
 import logging 
 from telegram.constants import ParseMode 
 from google.oauth2.service_account import Credentials
-from exportar_para_excel import enviar_para_drive as export_data_to_drive
+from exportar_para_excel import exportar_dataframe_para_drive as export_data_to_drive
 
 
 
