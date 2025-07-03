@@ -42,7 +42,7 @@ def botoes_pagina(lista, pagina, prefix="", por_pagina=5):
 
     return buttons, pagina
 
-# --- LISTAS CSV (SEM ALTERAÇÃO) ---
+# --- LISTAS CSV (sem alteração) ---
 
 def ler_orgaos_csv():
     if not os.path.exists(CSV_ORGAOS):
@@ -115,7 +115,6 @@ def exportar_reunioes_para_drive(dados: dict):
     spreadsheet_name = "REUNIAO_PP.xlsx"
 
     try:
-        # Buscar arquivo no Google Drive
         query = f"name='{spreadsheet_name}' and '{folder_id}' in parents and trashed=false"
         results = service.files().list(q=query, fields="files(id, name)").execute()
         files = results.get("files", [])
@@ -123,7 +122,6 @@ def exportar_reunioes_para_drive(dados: dict):
             raise FileNotFoundError(f"Arquivo '{spreadsheet_name}' não encontrado.")
         file_id = files[0]["id"]
 
-        # Baixar arquivo Excel existente
         request = service.files().get_media(fileId=file_id)
         fh = BytesIO()
         downloader = MediaIoBaseDownload(fh, request)
@@ -134,7 +132,6 @@ def exportar_reunioes_para_drive(dados: dict):
 
         df_existente = pd.read_excel(fh, engine='openpyxl')
 
-        # Extrair dados com validação
         figuras_orgaos = dados.get("figuras_orgaos")
         if figuras_orgaos and len(figuras_orgaos) > 0:
             orgao = figuras_orgaos[0].get("orgao_publico", "NÃO INFORMADO")
@@ -149,7 +146,6 @@ def exportar_reunioes_para_drive(dados: dict):
         participante = f"{orgao} - {municipio}" if municipio else orgao
         cliente = f"{figura_publica} - {cargo}".strip(" -")
 
-        # Formatar data para string padrão (YYYY-MM-DD)
         data_raw = dados.get("data")
         if isinstance(data_raw, (datetime, pd.Timestamp)):
             data_str = data_raw.strftime('%Y-%m-%d')
@@ -206,7 +202,6 @@ def exportar_demandas_para_drive(dados_gerais: dict, demandas: list[dict]):
     spreadsheet_name = "DEMANDAS_PP.xlsx"
 
     try:
-        # Buscar arquivo no Drive
         query = f"name='{spreadsheet_name}' and '{folder_id}' in parents and trashed=false"
         results = service.files().list(q=query, fields="files(id, name)").execute()
         files = results.get("files", [])
@@ -214,7 +209,6 @@ def exportar_demandas_para_drive(dados_gerais: dict, demandas: list[dict]):
             raise FileNotFoundError(f"Arquivo '{spreadsheet_name}' não encontrado.")
         file_id = files[0]["id"]
 
-        # Baixar planilha existente
         request = service.files().get_media(fileId=file_id)
         fh = BytesIO()
         downloader = MediaIoBaseDownload(fh, request)
@@ -225,7 +219,6 @@ def exportar_demandas_para_drive(dados_gerais: dict, demandas: list[dict]):
 
         df_existente = pd.read_excel(fh, engine='openpyxl')
 
-        # Montar novas linhas para demandas
         novas_linhas = []
         for d in demandas:
             categoria = "NÃO INFORMADO"
@@ -238,7 +231,6 @@ def exportar_demandas_para_drive(dados_gerais: dict, demandas: list[dict]):
                 participante = f"{categoria} - {dados_gerais.get('municipio', '')}"
                 cliente = f"{figuras_orgaos[0].get('figura_publica', '')} - {figuras_orgaos[0].get('cargo', '')}"
 
-            # Formatar data
             data_raw = dados_gerais.get("data")
             if isinstance(data_raw, (datetime, pd.Timestamp)):
                 data_str = data_raw.strftime('%Y-%m-%d')
@@ -278,35 +270,31 @@ def exportar_demandas_para_drive(dados_gerais: dict, demandas: list[dict]):
     except Exception as e:
         logger.error(f"Erro ao exportar demandas diretamente para planilha: {e}", exc_info=True)
 
-# --- FUNÇÃO PARA UPLOAD DE FOTO ---
+# --- FUNÇÃO PARA UPLOAD DE FOTO (EM MEMÓRIA) ---
 
-async def upload_photo_to_drive(photo_bytes: bytes, filename: str):
+async def upload_photo_to_drive(photo_bytes: bytes, filename: str) -> str | None:
     drive_service = get_drive_service()
     if not drive_service:
+        logger.error("Serviço do Google Drive não disponível para upload de foto.")
         return None
 
-    folder_id = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
+    # Usa a pasta específica para fotos, se configurada; senão, pasta padrão
+    folder_id = os.environ.get("GOOGLE_DRIVE_PHOTOS_FOLDER_ID") or os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
     if not folder_id:
-        logger.error("GOOGLE_DRIVE_FOLDER_ID não configurada para upload de foto.")
+        logger.error("Nenhuma pasta configurada para upload de fotos no Google Drive.")
         return None
 
-    temp_filepath = os.path.join("/tmp", filename)
     try:
-        with open(temp_filepath, "wb") as f:
-            f.write(photo_bytes)
-
         file_metadata = {
             'name': filename,
             'parents': [folder_id],
             'mimeType': 'image/jpeg'
         }
-        media = MediaFileUpload(temp_filepath, mimetype='image/jpeg', resumable=True)
-
+        media = MediaIoBaseUpload(BytesIO(photo_bytes), mimetype='image/jpeg', resumable=True)
         file = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-        return file.get('id')
+        file_id = file.get('id')
+        logger.info(f"Foto '{filename}' enviada para o Google Drive (pasta: {folder_id}) com ID: {file_id}")
+        return file_id
     except Exception as e:
         logger.error(f"Erro ao fazer upload da foto para o Google Drive: {e}", exc_info=True)
         return None
-    finally:
-        if os.path.exists(temp_filepath):
-            os.remove(temp_filepath)
