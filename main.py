@@ -16,7 +16,7 @@ from telegram.ext import (
 )
 
 import handlers
-from exportar_para_excel import export_data_to_drive
+from exportar_para_excel import exportar_dataframe_para_drive as export_data_to_drive
 
 # Carregar variáveis do .env (rail.env)
 script_dir = os.path.dirname(os.path.abspath(__file__))
