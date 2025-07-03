@@ -6,11 +6,12 @@ import csv
 import logging 
 from telegram.constants import ParseMode 
 from google.oauth2.service_account import Credentials
+from exportar_para_excel import enviar_para_drive as export_data_to_drive
 
 
 
 # Importa as funções que interagem com o Google Drive, como upload de fotos e exportação de dados Excel.
-from exportar_para_excel import export_data_to_drive, upload_photo_to_drive 
+
 
 # Importa módulos de suporte para configurações (config), utilidades (utils) e dados globais (globals).
 import config 
@@ -447,7 +448,7 @@ async def foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
      logger.info(f"Tentando fazer upload da foto {filename} para o Google Drive.")
      await update.message.reply_text("⏳ Enviando a foto para o Google Drive... Por favor, aguarde, isso pode levar alguns segundos.", parse_mode=ParseMode.HTML) 
-     drive_file_id = await upload_photo_to_drive(bytes(photo_bytes), filename) 
+     drive_file_id = await export_data_to_drive(bytes(photo_bytes), filename) 
     
      if drive_file_id:
          context.user_data["foto"] = drive_file_id 
