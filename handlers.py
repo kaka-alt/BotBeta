@@ -640,8 +640,9 @@ async def confirmacao(update, context):
     data = query.data
 
     if data == "confirmar_salvar":
-        utils.exportar_demandas_para_drive(user_data, user_data.get("demandas", []))
-        utils.exportar_reunioes_para_drive(user_data)
+        dados = dict(context.user_data)  # Faz uma cópia segura dos dados
+        utils.exportar_demandas_para_drive(dados, dados.get("demandas", []))
+        utils.exportar_reunioes_para_drive(dados)
 
         await query.edit_message_text(
             "🎉 Dados salvos com sucesso no banco de dados e nos arquivos Excel do Google Drive! Muito obrigado pelo seu registro.", 
