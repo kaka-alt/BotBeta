@@ -166,8 +166,6 @@ def exportar_reunioes_para_drive(dados: dict):
             "TIPO ATENDIMENTO": tipo_atendimento,
             "MUNICIPIO": municipio,
             "COLABORADOR": colaborador,
-            "Item Type": "",
-            "Path": "",
             "ATENDIMENTO": tipo_visita,
             "TEMA REUNIÃO": assunto
         }

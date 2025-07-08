@@ -50,7 +50,7 @@ async def colaborador_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
     data = query.data 
 
     if data == "colaborador_outro":
-        await query.message.reply_text("✍️ Entendido! Por favor, digite o <b>nome completo do colaborador</b>:")
+        await query.message.reply_text("✍️ Entendido! Por favor, digite o nome completo do colaborador:")
         return COLABORADOR_MANUAL 
     else:
         colaborador = data.replace("colaborador_", "") 
