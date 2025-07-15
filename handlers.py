@@ -173,18 +173,28 @@ async def iniciar_menu_orgao_publico_for_figura(update: Update, context: Context
     context.user_data['temp_orgao_pagina_for_figura'] = 0
 
     if not orgaos:
-        await update.message.reply_text("⚠️ Nenhum órgão disponível. Digite manualmente o nome do <b>órgão público</b> desta figura:", parse_mode=ParseMode.HTML)
+        msg = "⚠️ Nenhum órgão disponível. Digite manualmente o nome do <b>órgão público</b> desta figura:"
+        if update.callback_query:
+            await update.callback_query.message.reply_text(msg, parse_mode=ParseMode.HTML)
+        else:
+            await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
         return ORGAO_PUBLICO_FOR_FIGURA_MANUAL
 
     botoes, _ = utils.botoes_pagina(orgaos, 0, prefix="orgao_figura_")
 
-    # Remove o botão "refazer busca" (não necessário)
+    # Remove o botão de refazer busca se houver
     for linha in botoes:
         linha[:] = [btn for btn in linha if "refazer_busca" not in btn.callback_data]
 
     keyboard = InlineKeyboardMarkup(botoes)
-    await update.message.reply_text("🏛️ Escolha o <b>órgão público</b> da figura pública:", reply_markup=keyboard, parse_mode=ParseMode.HTML)
+
+    if update.callback_query:
+        await update.callback_query.message.reply_text("🏛️ Escolha o <b>órgão público</b> da figura pública:", reply_markup=keyboard, parse_mode=ParseMode.HTML)
+    else:
+        await update.message.reply_text("🏛️ Escolha o <b>órgão público</b> da figura pública:", reply_markup=keyboard, parse_mode=ParseMode.HTML)
+
     return ORGAO_PUBLICO_FOR_FIGURA_PAGINACAO
+
 
 
 # Paginação ou escolha do órgão
