@@ -129,6 +129,7 @@ async def tipo_atendimento_escolha(update: Update, context: ContextTypes.DEFAULT
 # --- NOVO FLUXO: Múltiplas Figuras Públicas/Órgãos ---
 
 # Pergunta se o usuário quer adicionar uma figura pública e órgão
+# Solicita se deseja adicionar Figura Pública e Órgão
 async def solicitar_figura_orgao_inicial(update: Update, context: ContextTypes.DEFAULT_TYPE):
     buttons = [
         [InlineKeyboardButton("➕ Adicionar Figura/Órgão", callback_data="add_figura_orgao")],
@@ -136,7 +137,6 @@ async def solicitar_figura_orgao_inicial(update: Update, context: ContextTypes.D
     ]
     reply_markup = InlineKeyboardMarkup(buttons)
 
-    # Verifica se a chamada veio de uma mensagem ou de um callback_query
     if update.callback_query:
         await update.callback_query.message.reply_text(
             "🧑‍🤝‍🏢 Deseja adicionar uma <b>Figura Pública</b> e o <b>Órgão</b> relacionado a esta ocorrência?",
@@ -144,44 +144,50 @@ async def solicitar_figura_orgao_inicial(update: Update, context: ContextTypes.D
             parse_mode=ParseMode.HTML
         )
     elif update.message:
-         await update.message.reply_text(
+        await update.message.reply_text(
             "🧑‍🤝‍🏢 Deseja adicionar uma <b>Figura Pública</b> e o <b>Órgão</b> relacionado a esta ocorrência?",
             reply_markup=reply_markup,
             parse_mode=ParseMode.HTML
         )
-    return ORGAO_FIGURA_CARGO_ESCOLHA # Novo estado para escolha inicial
+    return ORGAO_FIGURA_CARGO_ESCOLHA
 
-# Lida com a escolha inicial de adicionar figura pública/órgão
+
+# Lida com a escolha inicial do menu
 async def figura_orgao_escolha(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
 
     if data == "add_figura_orgao":
-        await query.edit_message_text("🏠 Ok! Digite uma <b>palavra-chave</b> para buscar o <b>órgão público</b> desta figura:", parse_mode=ParseMode.HTML)
-        return ORGAO_PUBLICO_FOR_FIGURA_KEYWORD # Inicia o sub-fluxo para coletar Figura/Órgão
+        await query.message.delete()
+        return await iniciar_menu_orgao_publico_for_figura(update, context)
     elif data == "fim_figuras_orgaos":
         await query.edit_message_text("✅ Ok, finalizando a adição de Figuras e Órgãos.")
-        # FLUXO CORRIGIDO: Após finalizar figuras/órgãos, segue para Assunto
         return await solicitar_assunto_inicial(update, context)
 
-# --- Sub-fluxo para coletar Órgão Público (DENTRO do loop de figuras) ---
-async def buscar_orgao_for_figura(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyword = update.message.text.lower()
+
+# Inicia menu direto de órgãos públicos (sem busca)
+async def iniciar_menu_orgao_publico_for_figura(update: Update, context: ContextTypes.DEFAULT_TYPE):
     orgaos = utils.ler_orgaos_csv()
-    resultados = [o for o in orgaos if keyword in o.lower()]
-    context.user_data['temp_orgaos_busca_for_figura'] = resultados # Usa uma temp var para este sub-fluxo
+    context.user_data['temp_orgaos_busca_for_figura'] = orgaos
     context.user_data['temp_orgao_pagina_for_figura'] = 0
 
-    if not resultados:
-        await update.message.reply_text("❗ Nenhum órgão encontrado. Digite manualmente o nome do <b>órgão público</b> para esta figura:", parse_mode=ParseMode.HTML)
+    if not orgaos:
+        await update.message.reply_text("⚠️ Nenhum órgão disponível. Digite manualmente o nome do <b>órgão público</b> desta figura:", parse_mode=ParseMode.HTML)
         return ORGAO_PUBLICO_FOR_FIGURA_MANUAL
 
-    buttons, pagina_atual = utils.botoes_pagina(resultados, 0, prefix="orgao_figura_") # Prefixo diferente
-    keyboard = InlineKeyboardMarkup(buttons)
-    await update.message.reply_text(f"Resultados encontrados : {len(resultados)}", reply_markup=keyboard)
+    botoes, _ = utils.botoes_pagina(orgaos, 0, prefix="orgao_figura_")
+
+    # Remove o botão "refazer busca" (não necessário)
+    for linha in botoes:
+        linha[:] = [btn for btn in linha if "refazer_busca" not in btn.callback_data]
+
+    keyboard = InlineKeyboardMarkup(botoes)
+    await update.message.reply_text("🏛️ Escolha o <b>órgão público</b> da figura pública:", reply_markup=keyboard, parse_mode=ParseMode.HTML)
     return ORGAO_PUBLICO_FOR_FIGURA_PAGINACAO
 
+
+# Paginação ou escolha do órgão
 async def orgao_paginacao_for_figura(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -194,6 +200,8 @@ async def orgao_paginacao_for_figura(update: Update, context: ContextTypes.DEFAU
         pagina_atual += 1
         context.user_data["temp_orgao_pagina_for_figura"] = pagina_atual
         botoes, _ = utils.botoes_pagina(resultados, pagina_atual, prefix="orgao_figura_")
+        for linha in botoes:
+            linha[:] = [btn for btn in linha if "refazer_busca" not in btn.callback_data]
         await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(botoes))
         return ORGAO_PUBLICO_FOR_FIGURA_PAGINACAO
 
@@ -201,39 +209,41 @@ async def orgao_paginacao_for_figura(update: Update, context: ContextTypes.DEFAU
         pagina_atual = max(0, pagina_atual - 1)
         context.user_data["temp_orgao_pagina_for_figura"] = pagina_atual
         botoes, _ = utils.botoes_pagina(resultados, pagina_atual, prefix="orgao_figura_")
+        for linha in botoes:
+            linha[:] = [btn for btn in linha if "refazer_busca" not in btn.callback_data]
         await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(botoes))
         return ORGAO_PUBLICO_FOR_FIGURA_PAGINACAO
 
     elif data == "orgao_figura_inserir_manual":
-        await query.message.reply_text("✍️ Digite manualmente o nome do <b>órgão público</b> para esta figura:", parse_mode=ParseMode.HTML)
+        await query.message.reply_text("✍️ Digite manualmente o nome do <b>órgão público</b> desta figura:", parse_mode=ParseMode.HTML)
         return ORGAO_PUBLICO_FOR_FIGURA_MANUAL
-
-    elif data == "orgao_figura_refazer_busca":
-        await query.message.reply_text("🔎 Digite uma nova palavra-chave para buscar o órgão desta figura:", parse_mode=ParseMode.HTML)
-        return ORGAO_PUBLICO_FOR_FIGURA_KEYWORD
 
     else:
         orgao_selecionado = data.replace("orgao_figura_", "")
-        context.user_data["nova_figura_orgao"] = {"orgao_publico": orgao_selecionado} # Inicia o objeto temporário
+        context.user_data["nova_figura_orgao"] = {"orgao_publico": orgao_selecionado}
         await query.message.edit_text(f"🏢 Órgão selecionado: <b>{orgao_selecionado}</b>.", parse_mode=ParseMode.HTML)
-        await query.message.reply_text("🧑‍💼 Ótimo! Agora, digite o <b>nome completo da figura pública</b>:", parse_mode=ParseMode.HTML)
-        return FIGURA_PUBLICA_FOR_FIGURA # Próximo passo no sub-fluxo
+        await query.message.reply_text("🧑‍💼 Agora, digite o <b>nome completo da figura pública</b>:", parse_mode=ParseMode.HTML)
+        return FIGURA_PUBLICA_FOR_FIGURA
 
+
+# Inserção manual do órgão
 async def orgao_manual_for_figura(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nome = update.message.text.strip()
-    context.user_data["nova_figura_orgao"] = {"orgao_publico": nome} # Inicia o objeto temporário
+    context.user_data["nova_figura_orgao"] = {"orgao_publico": nome}
     utils.salvar_orgao(nome)
     await update.message.reply_text(f"✔️ Órgão público registrado manualmente: <b>{nome}</b>.", parse_mode=ParseMode.HTML)
-    await update.message.reply_text("🧑‍💼 Ótimo! Agora, digite o <b>nome completo da figura pública</b>:", parse_mode=ParseMode.HTML)
+    await update.message.reply_text("🧑‍💼 Agora, digite o <b>nome completo da figura pública</b>:", parse_mode=ParseMode.HTML)
     return FIGURA_PUBLICA_FOR_FIGURA
 
-# Coleta Figura Pública (dentro do loop)
+
+# Entrada da figura pública
 async def figura_publica_input_for_figura(update: Update, context: ContextTypes.DEFAULT_TYPE):
     figura_publica = update.message.text.strip()
     context.user_data["nova_figura_orgao"]["figura_publica"] = figura_publica
     await update.message.reply_text(f"✅ Figura pública registrada: <b>{figura_publica}</b>.", parse_mode=ParseMode.HTML)
     await update.message.reply_text("💼 Qual é o <b>Cargo</b> desta figura pública?", parse_mode=ParseMode.HTML)
     return CARGO_FOR_FIGURA
+
 
 # Coleta Cargo (dentro do loop)
 async def cargo_input_for_figura(update: Update, context: ContextTypes.DEFAULT_TYPE):
