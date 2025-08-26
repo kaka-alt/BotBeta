@@ -664,8 +664,9 @@ async def confirmacao(update, context):
         utils.exportar_demandas_para_drive(dados, dados.get("demandas", []))
         utils.exportar_reunioes_para_drive(dados)
 
-        await query.send_message(
-            "🎉 Dados salvos com sucesso no banco de dados e nos arquivos Excel do Google Drive! Muito obrigado pelo seu registro.", 
+        await context.bot.send_message( # <--- CORREÇÃO AQUI
+            chat_id=query.message.chat_id,
+            text= "🎉 Dados salvos com sucesso no banco de dados e nos arquivos Excel do Google Drive! Muito obrigado pelo seu registro.", 
             parse_mode=ParseMode.HTML
         )
         context.user_data.clear() 
